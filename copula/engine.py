@@ -245,13 +245,22 @@ def _crps(scenarios: np.ndarray, reference: float) -> float:
 # DATA LOADERS
 # ─────────────────────────────────────────────────────────────────────────────
 def _load_zone(path: Path) -> pd.DataFrame:
+    if path.suffix == ".parquet":
+        df = pd.read_parquet(path)
+        df["Time Stamp"] = pd.to_datetime(df["Time Stamp"])
+        if "Date" not in df.columns:
+            df["Date"] = df["Time Stamp"].dt.floor("D")
+        if "Hour" not in df.columns:
+            df["Hour"] = df["Time Stamp"].dt.hour + 1
+        return df.sort_values("Time Stamp").reset_index(drop=True)
+
     df = pd.read_excel(path, sheet_name="Combined Load Error")
     rename = {}
     for c in df.columns:
         cl = str(c).strip().lower()
-        if "time" in cl:                      rename[c] = "Time Stamp"
-        elif "actual" in cl:                  rename[c] = "Actual"
-        elif "forecast" in cl:                rename[c] = "Forecast"
+        if "time" in cl:                       rename[c] = "Time Stamp"
+        elif "actual" in cl:                   rename[c] = "Actual"
+        elif "forecast" in cl:                 rename[c] = "Forecast"
         elif cl in ["error (mw)", "error mw"]: rename[c] = "Error_MW"
         elif cl in ["error (%)", "error %"]:   rename[c] = "Error_pct"
     df = df.rename(columns=rename)
@@ -262,12 +271,23 @@ def _load_zone(path: Path) -> pd.DataFrame:
 
 
 def _load_weather(path: Path) -> pd.Series:
+    # Try Parquet first (fast)
+    pq = path.parent / "parquet" / "zone_A_weather.parquet"
+    if pq.exists():
+        try:
+            df = pd.read_parquet(pq)
+            if "Date" in df.columns and "HDH" in df.columns:
+                df["Date"] = pd.to_datetime(df["Date"])
+                return df.dropna(subset=["HDH"]).set_index("Date")["HDH"]
+        except Exception:
+            pass
+    # Fall back to Excel
     try:
         df = pd.read_excel(path, sheet_name="Weather", header=1)
         col_map = {}
         for c in df.columns:
             cl = str(c).strip().lower()
-            if "date" in cl: col_map[c] = "Date"
+            if "date" in cl:  col_map[c] = "Date"
             elif "hdh" in cl: col_map[c] = "HDH"
         df = df.rename(columns=col_map)
         if "Date" not in df.columns or "HDH" not in df.columns:
@@ -323,7 +343,13 @@ def _estimate_downstate(zone_hist: Dict[str, pd.DataFrame],
 
 def _find_zone_files(data_dir: Path) -> Dict[str, Path]:
     zone_files: Dict[str, Path] = {}
+    pq_dir = data_dir / "parquet"
     for z in ZONE_LETTERS:
+        # Prefer Parquet (fast) — falls back to Excel if not yet converted
+        pq = pq_dir / f"zone_{z}.parquet"
+        if pq.exists():
+            zone_files[f"Zone {z}"] = pq
+            continue
         for name in [f"Zone {z} Combined Data (Full Year 2011-2025).xlsx",
                      f"Zone {z} Combined Data.xlsx",
                      f"Zone_{z}_Combined_Data.xlsx"]:
@@ -334,7 +360,7 @@ def _find_zone_files(data_dir: Path) -> Dict[str, Path]:
         if f"Zone {z}" not in zone_files:
             raise FileNotFoundError(
                 f"Data file for Zone {z} not found in {data_dir}. "
-                "Copy your Zone_X_Combined_Data Excel files into the data/ folder.")
+                "Run convert_to_parquet.py or copy Excel files into data/.")
     return zone_files
 
 
