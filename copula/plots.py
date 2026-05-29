@@ -98,6 +98,11 @@ def _plot_scenario_band(m, sr) -> dict:
                    ticktext=[str(h) for h in range(1, 25)]),
         yaxis=dict(**LAYOUT_BASE["yaxis"], title="System Load (MW)",
                    tickformat=",.0f"),
+        # Legend inside the plot (top-right) so it doesn't collide with the title
+        legend=dict(orientation="v", yanchor="top", y=0.99,
+                    xanchor="right", x=0.99,
+                    bgcolor="rgba(255,255,255,0.88)",
+                    bordercolor="#E2E8F0", borderwidth=1, font_size=10),
     )
     return {"id": "plot_01_scenario_band", "title": "Scenario Band",
             "data": traces, "layout": layout}
