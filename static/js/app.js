@@ -54,13 +54,9 @@ async function fetchDateInfo() {
   const date    = dateEl?.value;
   const card    = document.getElementById("dateInfoCard");
   const spinner = document.getElementById("dateInfoSpinner");
-  const autoHdhRow    = document.getElementById("autoHdhRow");
-  const noAutoHdhRow  = document.getElementById("noAutoHdhRow");
 
   if (!date) {
     card?.classList.add("d-none");
-    autoHdhRow?.classList.add("d-none");
-    noAutoHdhRow?.classList.add("d-none");
     return;
   }
 
@@ -98,14 +94,13 @@ async function fetchDateInfo() {
       hn.classList.add("d-none");
     }
 
-    // Auto HDH
+    // Auto HDH — shown inline in date card
+    const hdhInline = document.getElementById("autoHdhInline");
     if (d.hdh !== null && d.hdh !== undefined) {
       document.getElementById("autoHdhVal").textContent = `${d.hdh} HDH`;
-      autoHdhRow?.classList.remove("d-none");
-      noAutoHdhRow?.classList.add("d-none");
+      hdhInline?.classList.remove("d-none");
     } else {
-      autoHdhRow?.classList.add("d-none");
-      noAutoHdhRow?.classList.remove("d-none");
+      hdhInline?.classList.add("d-none");
     }
 
     spinner?.classList.add("d-none");
@@ -320,10 +315,9 @@ async function generateScenarios() {
     return;
   }
 
-  const dayWindow   = parseInt(document.querySelector('input[name="dayWindow"]:checked')?.value || "30");
-  const histYears   = parseInt(document.getElementById("histYears")?.value || "5");
-  const hdhOverride = parseFloat(document.getElementById("hdh")?.value) || null;
-  const seed        = parseInt(document.getElementById("randSeed")?.value || "42");
+  const dayWindow = parseInt(document.querySelector('input[name="dayWindow"]:checked')?.value || "30");
+  const histYears = parseInt(document.getElementById("histYears")?.value || "5");
+  const seed      = parseInt(document.getElementById("randSeed")?.value || "42");
   const wPeak       = parseFloat(document.getElementById("wPeak")?.value    || "0.30");
   const wEnergy     = parseFloat(document.getElementById("wEnergy")?.value  || "0.25");
   const wRamp       = parseFloat(document.getElementById("wRamp")?.value    || "0.15");
@@ -344,7 +338,6 @@ async function generateScenarios() {
     w_weather:   wWeather,
     w_recency:   wRecency,
   };
-  if (hdhOverride !== null && !isNaN(hdhOverride)) payload.hdh = hdhOverride;
 
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Running Copula…`;
@@ -358,7 +351,17 @@ async function generateScenarios() {
       body:    JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      stopLoadingAnimation();
+      const hint = res.status === 503 || res.status === 502
+        ? "The server is starting up after being idle — please wait 30 seconds and try again."
+        : `Server returned HTTP ${res.status}. Check the Render logs for details.`;
+      showSection("error", hint);
+      return;
+    }
     stopLoadingAnimation();
 
     if (!data.success) {
@@ -374,7 +377,7 @@ async function generateScenarios() {
 
   } catch (err) {
     stopLoadingAnimation();
-    showSection("error", `Network error: ${err.message}`);
+    showSection("error", `Request failed: ${err.message}`);
   } finally {
     btn.disabled = false;
     btn.innerHTML = `<i class="bi bi-cpu me-2"></i>Generate 50 Scenarios`;
