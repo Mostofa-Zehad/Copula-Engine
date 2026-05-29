@@ -22,8 +22,8 @@ Given a 24-hour load forecast for any day of the year, the engine:
 
 ### 1. Clone the repo
 ```bash
-git clone https://github.com/Mostofa-Zehad/nyiso-copula-scenarios.git
-cd nyiso-copula-scenarios
+git clone https://github.com/Mostofa-Zehad/Copula-Engine.git
+cd Copula-Engine
 ```
 
 ### 2. Install dependencies
