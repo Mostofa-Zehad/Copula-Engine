@@ -66,6 +66,18 @@
       color: #64748B;
       margin-top: 4px;
     }
+    .zone-btn {
+      min-width: 62px;
+      padding: 5px 6px;
+      text-align: center;
+      font-size: 12px;
+    }
+    .zone-check:checked + .zone-btn {
+      background: #0B1F3A;
+      color: #fff;
+      border-color: #0B1F3A;
+    }
+    .zone-name-sub { font-size: 9px; line-height: 1.2; opacity: .85; }
   </style>
 </head>
 <body>
@@ -177,10 +189,36 @@
           </div>
         </div>
 
-        <!-- STEP 2: FORECAST INPUT -->
+        <!-- STEP 2: ZONE SELECTION -->
         <div class="card-panel mt-3">
           <div class="panel-header">
             <span class="step-badge">2</span>
+            <span class="panel-title">Select Zones
+              <span id="zoneBadge" class="badge bg-primary ms-2">All 11</span>
+            </span>
+          </div>
+          <div class="panel-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label fw-600 mb-0">NYISO Zones</label>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllZones()">All</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearAllZones()">Clear</button>
+              </div>
+            </div>
+            <div id="zoneCheckboxes" class="d-flex flex-wrap gap-2">
+              <!-- built by JS -->
+            </div>
+            <div id="zoneForecastHint" class="form-hint mt-2">
+              <i class="bi bi-info-circle me-1"></i>
+              24-hour forecast is the total load for all selected zones
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3: FORECAST INPUT -->
+        <div class="card-panel mt-3">
+          <div class="panel-header">
+            <span class="step-badge">3</span>
             <span class="panel-title">24-Hour System Forecast (MW)</span>
           </div>
           <div class="panel-body">
@@ -223,10 +261,10 @@
           </div>
         </div>
 
-        <!-- STEP 3: HISTORICAL SETTINGS -->
+        <!-- STEP 4: HISTORICAL SETTINGS -->
         <div class="card-panel mt-3">
           <div class="panel-header">
-            <span class="step-badge">3</span>
+            <span class="step-badge">4</span>
             <span class="panel-title">Historical Window</span>
           </div>
           <div class="panel-body">
@@ -267,12 +305,12 @@
           </div>
         </div>
 
-        <!-- STEP 4: ADVANCED (COLLAPSIBLE) -->
+        <!-- STEP 5: ADVANCED (COLLAPSIBLE) -->
         <div class="card-panel mt-3">
           <button class="panel-header w-100 text-start border-0 bg-transparent"
                   type="button" data-bs-toggle="collapse"
                   data-bs-target="#advancedPanel" aria-expanded="false">
-            <span class="step-badge">4</span>
+            <span class="step-badge">5</span>
             <span class="panel-title">Advanced Settings</span>
             <i class="bi bi-chevron-down ms-auto text-muted"></i>
           </button>
@@ -348,8 +386,8 @@
             Results — 14 interactive charts, summary metrics, and Excel download — will appear here.</p>
           <div class="placeholder-tips">
             <div class="tip"><i class="bi bi-1-circle-fill me-2 text-primary"></i>Pick a date — day type &amp; weather HDH auto-detected</div>
-            <div class="tip"><i class="bi bi-2-circle-fill me-2 text-primary"></i>Upload 24-hour load forecast (CSV or Excel .xlsx)</div>
-            <div class="tip"><i class="bi bi-3-circle-fill me-2 text-primary"></i>Choose historical years &amp; analog search window</div>
+            <div class="tip"><i class="bi bi-2-circle-fill me-2 text-primary"></i>Select 1–11 NYISO zones to generate scenarios for</div>
+            <div class="tip"><i class="bi bi-3-circle-fill me-2 text-primary"></i>Upload 24-hour total load forecast for selected zones</div>
             <div class="tip"><i class="bi bi-4-circle-fill me-2 text-primary"></i>Click generate — explore 14 charts, download Excel</div>
           </div>
         </div>
@@ -366,7 +404,7 @@
           <div class="loading-steps">
             <div class="loading-step active" id="ls1"><i class="bi bi-check-circle-fill me-2"></i>Loading historical zone data</div>
             <div class="loading-step" id="ls2"><i class="bi bi-circle me-2"></i>Scoring analog days</div>
-            <div class="loading-step" id="ls3"><i class="bi bi-circle me-2"></i>Fitting Ledoit-Wolf copula (264D)</div>
+            <div class="loading-step" id="ls3"><i class="bi bi-circle me-2"></i>Fitting Ledoit-Wolf copula</div>
             <div class="loading-step" id="ls4"><i class="bi bi-circle me-2"></i>Drawing 50 dependent scenarios</div>
             <div class="loading-step" id="ls5"><i class="bi bi-circle me-2"></i>Computing metrics &amp; charts</div>
           </div>

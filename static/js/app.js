@@ -32,9 +32,17 @@ const WIDE_CHARTS = ["plot_02_fan", "plot_06_corr_heatmap",
 let currentSessionId = null;
 let allPlots = [];
 
+// ── Zone metadata ─────────────────────────────────────────────────────────────
+const ZONE_LABELS = {
+  A: "West",    B: "Genesee", C: "Central",  D: "North",
+  E: "Mohawk",  F: "Capital", G: "Hudson V", H: "Millwood",
+  I: "Dunwoodie", J: "NYC",   K: "Long Is.",
+};
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   buildForecastGrid();
+  buildZoneCheckboxes();
   checkDataStatus();
   setDefaultDate();
   setupChartNav();
@@ -108,6 +116,84 @@ async function fetchDateInfo() {
     spinner?.classList.add("d-none");
     console.warn("date-info fetch failed:", err);
   }
+}
+
+// ── Zone selection ────────────────────────────────────────────────────────────
+function buildZoneCheckboxes() {
+  const container = document.getElementById("zoneCheckboxes");
+  if (!container) return;
+  container.innerHTML = "";
+  for (const letter of "ABCDEFGHIJK") {
+    const id = `zone_cb_${letter}`;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `
+      <input type="checkbox" class="btn-check zone-check" id="${id}"
+             value="Zone ${letter}" checked autocomplete="off"
+             onchange="onZoneToggle()"/>
+      <label class="btn btn-sm btn-outline-secondary zone-btn" for="${id}"
+             title="Zone ${letter} — ${ZONE_LABELS[letter]}">
+        <strong>${letter}</strong>
+        <span class="zone-name-sub d-block">${ZONE_LABELS[letter]}</span>
+      </label>`;
+    container.appendChild(wrap);
+  }
+  updateZoneBadge();
+}
+
+function getSelectedZones() {
+  return Array.from(document.querySelectorAll(".zone-check:checked"))
+    .map(cb => cb.value);
+}
+
+function onZoneToggle() {
+  const selected = getSelectedZones();
+  if (selected.length === 0) {
+    showToast("Select at least one zone", "error");
+  }
+  updateZoneBadge();
+  updateForecastZoneHint(selected);
+}
+
+function updateZoneBadge() {
+  const selected = getSelectedZones();
+  const badge = document.getElementById("zoneBadge");
+  if (!badge) return;
+  if (selected.length === 11) {
+    badge.textContent = "All 11";
+    badge.className = "badge bg-primary ms-2";
+  } else if (selected.length === 0) {
+    badge.textContent = "None";
+    badge.className = "badge bg-danger ms-2";
+  } else {
+    badge.textContent = `${selected.length} of 11`;
+    badge.className = "badge bg-secondary ms-2";
+  }
+}
+
+function updateForecastZoneHint(selected) {
+  const hint = document.getElementById("zoneForecastHint");
+  if (!hint) return;
+  if (!selected) selected = getSelectedZones();
+  if (selected.length === 11) {
+    hint.innerHTML = `<i class="bi bi-info-circle me-1"></i>24-hour forecast is the total system load for all 11 zones`;
+  } else if (selected.length === 1) {
+    hint.innerHTML = `<i class="bi bi-info-circle me-1"></i>24-hour forecast is the load for <strong>${selected[0]}</strong>`;
+  } else {
+    const names = selected.map(z => z.replace("Zone ", "Zone ")).join(" + ");
+    hint.innerHTML = `<i class="bi bi-info-circle me-1"></i>24-hour forecast is the combined load for <strong>${names}</strong>`;
+  }
+}
+
+function selectAllZones() {
+  document.querySelectorAll(".zone-check").forEach(cb => cb.checked = true);
+  updateZoneBadge();
+  updateForecastZoneHint();
+}
+
+function clearAllZones() {
+  document.querySelectorAll(".zone-check").forEach(cb => cb.checked = false);
+  updateZoneBadge();
+  updateForecastZoneHint();
 }
 
 // ── Data status check ─────────────────────────────────────────────────────────
@@ -308,6 +394,12 @@ async function generateScenarios() {
     return;
   }
 
+  const selectedZones = getSelectedZones();
+  if (selectedZones.length === 0) {
+    showToast("Please select at least one NYISO zone", "error");
+    return;
+  }
+
   const forecast24h = getForecast24();
   if (forecast24h.filter(v => v > 0).length < 12) {
     showToast("Please enter at least 12 hourly forecast values (MW)", "error");
@@ -327,6 +419,7 @@ async function generateScenarios() {
   const payload = {
     target_date:      targetDate,
     forecast_24h:     forecast24h,
+    selected_zones:   selectedZones,
     historical_years: histYears,
     day_window:       dayWindow,
     seed,
@@ -337,6 +430,11 @@ async function generateScenarios() {
     w_weather:   wWeather,
     w_recency:   wRecency,
   };
+
+  // Update copula dimension label in the loading screen
+  const dims = selectedZones.length * 24;
+  const ls3  = document.getElementById("ls3");
+  if (ls3) ls3.innerHTML = `<i class="bi bi-circle me-2"></i>Fitting Ledoit-Wolf copula (${dims}D)`;
 
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Running Copula…`;
@@ -440,7 +538,7 @@ function renderKPICards(m) {
 
   const kpis = [
     { label: "Analog Days Used",       value: m.n_analogs.toLocaleString(),     sub: `${m.historical_years || "–"}yr window`,               cls: "kpi-navy"   },
-    { label: "Copula Dimensions",       value: m.n_dimensions,                   sub: "11 zones × 24 hours",                                  cls: "kpi-purple" },
+    { label: "Copula Dimensions",       value: m.n_dimensions,                   sub: `${m.zone_names.length} zone${m.zone_names.length > 1 ? "s" : ""} × 24 hours`, cls: "kpi-purple" },
     { label: "LW Shrinkage",            value: m.shrink_coeff,                   sub: "Ledoit-Wolf coefficient",                              cls: ""           },
     { label: "Mean Daily Energy",       value: `${(m.daily_E_mean/1000).toFixed(1)}k`, sub: `P05: ${(m.daily_E_p05/1000).toFixed(1)}k · P95: ${(m.daily_E_p95/1000).toFixed(1)}k MWh`, cls: "kpi-green" },
     { label: "Most Likely Peak Hour",   value: `H${String(m.peak_hr_mode).padStart(2,"0")}`, sub: `${m.peak_hr_mode_pct}% probability`,       cls: "kpi-gold"   },

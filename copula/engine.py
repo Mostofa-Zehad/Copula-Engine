@@ -110,6 +110,7 @@ class CopulaParams:
     forecast_24h: List[float]
     hdh: Optional[float] = None          # auto-filled if None
     day_type: Optional[str] = None       # auto-detected if None
+    selected_zones: Optional[List[str]] = None  # None = all 11; e.g. ["Zone J","Zone K"]
     historical_years: int = 5
     day_window: int = 30                 # ±days around target day-of-year
     n_scenarios: int = 50
@@ -137,6 +138,18 @@ class CopulaParams:
             self.w_downstate /= total_w
             self.w_weather   /= total_w
             self.w_recency   /= total_w
+        # Resolve and validate zone selection
+        _all = [f"Zone {z}" for z in ZONE_LETTERS]
+        if self.selected_zones is None:
+            self.selected_zones = _all
+        else:
+            bad = [z for z in self.selected_zones if z not in _all]
+            if bad:
+                raise ValueError(f"Unknown zone(s): {bad}. Must be Zone A through Zone K.")
+            if len(self.selected_zones) < 1:
+                raise ValueError("At least one zone must be selected.")
+            # Enforce canonical A→K order
+            self.selected_zones = [z for z in _all if z in set(self.selected_zones)]
 
 
 @dataclass
@@ -271,16 +284,19 @@ def _load_zone(path: Path) -> pd.DataFrame:
 
 
 def _load_weather(path: Path) -> pd.Series:
-    # Try Parquet first (fast)
-    pq = path.parent / "parquet" / "zone_A_weather.parquet"
-    if pq.exists():
-        try:
-            df = pd.read_parquet(pq)
-            if "Date" in df.columns and "HDH" in df.columns:
-                df["Date"] = pd.to_datetime(df["Date"])
-                return df.dropna(subset=["HDH"]).set_index("Date")["HDH"]
-        except Exception:
-            pass
+    # Try Parquet first — search both path.parent and path.parent.parent
+    # so this works whether path points to an Excel file (parent = data/)
+    # or a Parquet data file (parent = data/parquet/).
+    for search_dir in [path.parent, path.parent.parent]:
+        pq = search_dir / "parquet" / "zone_A_weather.parquet"
+        if pq.exists():
+            try:
+                df = pd.read_parquet(pq)
+                if "Date" in df.columns and "HDH" in df.columns:
+                    df["Date"] = pd.to_datetime(df["Date"])
+                    return df.dropna(subset=["HDH"]).set_index("Date")["HDH"]
+            except Exception:
+                pass
     # Fall back to Excel
     try:
         df = pd.read_excel(path, sheet_name="Weather", header=1)
@@ -341,10 +357,11 @@ def _estimate_downstate(zone_hist: Dict[str, pd.DataFrame],
     return tgt_forecast * 0.55
 
 
-def _find_zone_files(data_dir: Path) -> Dict[str, Path]:
+def _find_zone_files(data_dir: Path,
+                     zone_letters: str = ZONE_LETTERS) -> Dict[str, Path]:
     zone_files: Dict[str, Path] = {}
     pq_dir = data_dir / "parquet"
-    for z in ZONE_LETTERS:
+    for z in zone_letters:
         # Prefer Parquet (fast) — falls back to Excel if not yet converted
         pq = pq_dir / f"zone_{z}.parquet"
         if pq.exists():
@@ -383,9 +400,10 @@ def run_copula(params: CopulaParams) -> ScenarioResult:
     tgt_year  = target_ts.year
 
     # ── Locate data files ─────────────────────────────────────────────────────
-    zone_files   = _find_zone_files(data_dir)
+    _selected_letters = "".join(z.split()[-1] for z in params.selected_zones)
+    zone_files   = _find_zone_files(data_dir, zone_letters=_selected_letters)
     holiday_file = _find_holiday_file(data_dir)
-    zone_names   = [f"Zone {z}" for z in ZONE_LETTERS]
+    zone_names   = params.selected_zones
 
     # ── Auto-detect day type ──────────────────────────────────────────────────
     day_info = detect_day_type(target_ts, holiday_file)
@@ -394,12 +412,18 @@ def run_copula(params: CopulaParams) -> ScenarioResult:
     # ── Load zone data ────────────────────────────────────────────────────────
     zone_hist = {z: _load_zone(zone_files[z]) for z in zone_names}
 
-    # ── Auto-lookup weather ───────────────────────────────────────────────────
-    hdh_used = params.hdh
-    if hdh_used is None:
-        hdh_used = lookup_weather(target_ts, zone_files["Zone A"])
+    # ── Auto-lookup weather (always Zone A, regardless of selected zones) ────────
+    _zone_a_file = zone_files.get("Zone A")
+    if _zone_a_file is None:
+        try:
+            _zone_a_file = _find_zone_files(data_dir, "A")["Zone A"]
+        except FileNotFoundError:
+            _zone_a_file = None
 
-    system_hdh = _load_weather(zone_files["Zone A"])
+    hdh_used = params.hdh
+    if hdh_used is None and _zone_a_file:
+        hdh_used = lookup_weather(target_ts, _zone_a_file)
+    system_hdh = _load_weather(_zone_a_file) if _zone_a_file else pd.Series(dtype=float)
 
     # ── Load / build calendar ─────────────────────────────────────────────────
     cal = None

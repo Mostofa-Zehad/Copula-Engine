@@ -37,6 +37,9 @@ def _find_holiday_file():
 
 
 def _find_zone_a_file():
+    pq = DATA_DIR / "parquet" / "zone_A.parquet"
+    if pq.exists():
+        return pq
     for fn in ["Zone A Combined Data (Full Year 2011-2025).xlsx",
                "Zone A Combined Data.xlsx"]:
         p = DATA_DIR / fn
@@ -146,6 +149,7 @@ def generate():
             forecast_24h=data["forecast_24h"],
             hdh=data.get("hdh"),
             day_type=data.get("day_type"),          # None → auto-detected in engine
+            selected_zones=data.get("selected_zones"),  # None → all 11 zones
             historical_years=int(data.get("historical_years", 5)),
             day_window=int(data.get("day_window", 30)),
             n_scenarios=50,
