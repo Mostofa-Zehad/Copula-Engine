@@ -43,8 +43,7 @@ document.addEventListener("DOMContentLoaded", () => {
 function setDefaultDate() {
   const el = document.getElementById("targetDate");
   if (!el) return;
-  el.value = "2026-01-15";
-  // Trigger date info lookup for the default date
+  el.value = "2025-01-15";
   fetchDateInfo();
 }
 
@@ -351,21 +350,24 @@ async function generateScenarios() {
       body:    JSON.stringify(payload),
     });
 
+    // Guard: if server returns non-JSON (cold start, proxy error), show friendly message
     let data;
     try {
       data = await res.json();
     } catch {
       stopLoadingAnimation();
-      const hint = res.status === 503 || res.status === 502
-        ? "The server is starting up after being idle — please wait 30 seconds and try again."
-        : `Server returned HTTP ${res.status}. Check the Render logs for details.`;
-      showSection("error", hint);
+      if (res.status === 503 || res.status === 502 || res.status === 0) {
+        showSection("error", "The server is waking up after being idle — please wait 30 seconds and try again.");
+      } else {
+        showSection("error", `Server returned HTTP ${res.status} (non-JSON). Check Render logs. Try again — it may be a cold-start issue.`);
+      }
       return;
     }
     stopLoadingAnimation();
 
     if (!data.success) {
-      showSection("error", data.error || "Unknown server error");
+      const detail = data.detail ? `\n\n${data.detail}` : "";
+      showSection("error", (data.error || "Unknown server error") + detail);
       return;
     }
 
@@ -397,12 +399,22 @@ function showSection(section, errorMsg = "") {
     document.getElementById("resultsSection")?.classList.remove("d-none");
     window.scrollTo({ top: document.getElementById("resultsSection")?.offsetTop - 80, behavior: "smooth" });
   } else if (section === "error") {
+    // Split error message from optional traceback (separated by \n\n)
+    const parts = errorMsg.split("\n\n");
+    const mainMsg = parts[0];
+    const traceBlock = parts.length > 1
+      ? `<details class="mt-2"><summary class="text-muted small" style="cursor:pointer">Show technical details</summary>
+           <pre style="font-size:11px;background:#F8FAFC;padding:8px;border-radius:4px;overflow:auto;max-height:220px;white-space:pre-wrap">${escapeHtml(parts.slice(1).join("\n\n"))}</pre>
+         </details>`
+      : "";
+
     const div = document.createElement("div");
     div.id = "errorSection";
     div.className = "error-card fade-in";
     div.innerHTML = `
       <div class="error-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Generation Failed</div>
-      <div class="error-msg">${escapeHtml(errorMsg)}</div>
+      <div class="error-msg">${escapeHtml(mainMsg)}</div>
+      ${traceBlock}
       <div class="mt-3 text-muted small">
         <strong>Common fixes:</strong> Verify data files are in <code>data/</code>,
         increase historical years, or widen the analog search window.

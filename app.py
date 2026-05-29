@@ -174,15 +174,16 @@ def generate():
         })
 
     except FileNotFoundError as e:
-        return jsonify({"success": False, "error": str(e)}), 422
+        return jsonify({"success": False, "error": str(e)}), 200
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 422
+        return jsonify({"success": False, "error": str(e)}), 200
     except Exception as e:
+        # Return 200 so Render's proxy doesn't replace the JSON body with HTML
         return jsonify({
             "success": False,
             "error": str(e),
             "detail": traceback.format_exc(),
-        }), 500
+        }), 200
 
 
 @app.route("/api/download/<session_id>")

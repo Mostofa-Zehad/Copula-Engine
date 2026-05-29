@@ -376,15 +376,32 @@ def run_copula(params: CopulaParams) -> ScenarioResult:
     system_hdh = _load_weather(zone_files["Zone A"])
 
     # ── Load / build calendar ─────────────────────────────────────────────────
+    cal = None
     if holiday_file:
-        cal = pd.read_excel(holiday_file)
-        cal["Date"] = pd.to_datetime(cal["Date"])
-        if "IsHoliday" not in cal.columns: cal["IsHoliday"] = 0
-        if "IsWeekend" not in cal.columns:
-            cal["IsWeekend"] = (cal["Date"].dt.dayofweek >= 5).astype(int)
-        if "Month" not in cal.columns:
-            cal["Month"] = cal["Date"].dt.month
-    else:
+        try:
+            cal = pd.read_excel(holiday_file)
+            # Normalise column names — accept "date", "Date", "DATE", etc.
+            col_map = {c: c.strip() for c in cal.columns}
+            cal = cal.rename(columns=col_map)
+            date_col = next((c for c in cal.columns
+                             if str(c).strip().lower() == "date"), None)
+            if date_col and date_col != "Date":
+                cal = cal.rename(columns={date_col: "Date"})
+            if "Date" not in cal.columns:
+                cal = None          # fall through to synthetic calendar
+            else:
+                cal["Date"] = pd.to_datetime(cal["Date"], errors="coerce")
+                cal = cal.dropna(subset=["Date"])
+                if "IsHoliday" not in cal.columns:
+                    cal["IsHoliday"] = 0
+                if "IsWeekend" not in cal.columns:
+                    cal["IsWeekend"] = (cal["Date"].dt.dayofweek >= 5).astype(int)
+                if "Month" not in cal.columns:
+                    cal["Month"] = cal["Date"].dt.month
+        except Exception:
+            cal = None
+
+    if cal is None:
         dates = pd.date_range("2011-01-01", "2025-12-31", freq="D")
         cal = pd.DataFrame({
             "Date":      dates,
