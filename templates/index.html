@@ -10,6 +10,63 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
   <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
   <link rel="stylesheet" href="/static/css/style.css"/>
+  <style>
+    .date-info-card {
+      background: linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%);
+      border: 1px solid #C7D2FE;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .day-type-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .3px;
+    }
+    .pill-weekday  { background: #DBEAFE; color: #1D4ED8; }
+    .pill-weekend  { background: #FEF3C7; color: #B45309; }
+    .pill-holiday  { background: #FCE7F3; color: #BE185D; }
+    .auto-hdh-bar {
+      background: #F0FDF4;
+      border: 1px solid #BBF7D0;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12.5px;
+      color: #166534;
+    }
+    .day-window-group .btn-check:checked + .btn {
+      background: #0B1F3A;
+      color: #fff;
+      border-color: #0B1F3A;
+    }
+    .day-window-group .btn {
+      font-size: 13px;
+      padding: 5px 10px;
+    }
+    .upload-zone {
+      border: 2px dashed #CBD5E1;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .upload-zone:hover { border-color: #0B1F3A; background: #F8FAFC; }
+    .upload-zone input[type=file] { display: none; }
+    .upload-filename {
+      font-size: 12px;
+      color: #64748B;
+      margin-top: 4px;
+    }
+  </style>
 </head>
 <body>
 
@@ -27,7 +84,7 @@
         </div>
       </div>
       <div class="d-flex align-items-center gap-3">
-        <span class="badge-version">GC-50 v2.0</span>
+        <span class="badge-version">GC-50 v2.1</span>
         <span id="statusBadge" class="status-badge status-checking">
           <i class="bi bi-circle-fill me-1"></i> Checking…
         </span>
@@ -80,35 +137,37 @@
     <div class="col-xl-4 col-lg-5">
       <form id="copulaForm" novalidate>
 
-        <!-- STEP 1: DATE & DAY TYPE -->
+        <!-- STEP 1: TARGET DATE -->
         <div class="card-panel">
           <div class="panel-header">
             <span class="step-badge">1</span>
-            <span class="panel-title">Target Date &amp; Day Type</span>
+            <span class="panel-title">Target Date</span>
           </div>
           <div class="panel-body">
             <div class="mb-3">
-              <label class="form-label fw-600">Target Date</label>
+              <label class="form-label fw-600">Select Date</label>
               <input type="date" id="targetDate" class="form-control form-control-custom"
-                     min="2011-01-01" max="2025-12-31" required/>
+                     min="2011-01-01" max="2025-12-31" required
+                     onchange="fetchDateInfo()"/>
               <div class="form-hint">Select any date within the 2011–2025 data range</div>
             </div>
-            <div class="mb-2">
-              <label class="form-label fw-600">Day Type</label>
-              <div class="btn-group w-100" role="group">
-                <input type="radio" class="btn-check" name="dayType" id="dtWeekday" value="weekday" checked/>
-                <label class="btn btn-outline-primary btn-toggle" for="dtWeekday">
-                  <i class="bi bi-calendar-week me-1"></i>Weekday
-                </label>
-                <input type="radio" class="btn-check" name="dayType" id="dtWeekend" value="weekend"/>
-                <label class="btn btn-outline-primary btn-toggle" for="dtWeekend">
-                  <i class="bi bi-calendar-weekend me-1"></i>Weekend
-                </label>
-                <input type="radio" class="btn-check" name="dayType" id="dtHoliday" value="holiday"/>
-                <label class="btn btn-outline-primary btn-toggle" for="dtHoliday">
-                  <i class="bi bi-star me-1"></i>Holiday
-                </label>
+
+            <!-- Auto-detected date info card (hidden until date selected) -->
+            <div id="dateInfoCard" class="date-info-card d-none">
+              <i class="bi bi-calendar-check text-primary fs-5"></i>
+              <div class="flex-grow-1">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <span id="dateDisplayLabel" class="fw-600 text-dark"></span>
+                  <span id="weekdayNameLabel" class="text-muted small"></span>
+                </div>
+                <div class="mt-1 d-flex align-items-center gap-2 flex-wrap">
+                  <span id="dayTypePill" class="day-type-pill pill-weekday">
+                    <i class="bi bi-calendar-week"></i> Weekday
+                  </span>
+                  <span id="holidayNameLabel" class="text-muted small d-none"></span>
+                </div>
               </div>
+              <div id="dateInfoSpinner" class="spinner-border spinner-border-sm text-primary d-none" role="status"></div>
             </div>
           </div>
         </div>
@@ -117,28 +176,33 @@
         <div class="card-panel mt-3">
           <div class="panel-header">
             <span class="step-badge">2</span>
-            <span class="panel-title">24-Hour Forecast (MW)</span>
+            <span class="panel-title">24-Hour System Forecast (MW)</span>
           </div>
           <div class="panel-body">
-            <div class="mb-2 d-flex gap-2">
+
+            <!-- File upload zone -->
+            <label class="upload-zone mb-2" for="forecastUpload">
+              <i class="bi bi-cloud-upload fs-4 text-primary"></i>
+              <div class="fw-600 mt-1">Upload Forecast File</div>
+              <div class="text-muted small">CSV or Excel (.xlsx) · one value per row or comma-separated</div>
+              <div id="uploadFilename" class="upload-filename d-none"></div>
+              <input type="file" id="forecastUpload" accept=".csv,.xlsx,.xls,.txt"
+                     onchange="handleFileUpload(this)"/>
+            </label>
+
+            <div class="text-center text-muted small mb-2">— or use a sample forecast —</div>
+
+            <div class="d-flex gap-2 mb-3">
               <button type="button" class="btn btn-sm btn-outline-secondary flex-fill"
                       onclick="loadSampleForecast()">
-                <i class="bi bi-lightning me-1"></i>Load Sample (Winter Peak)
+                <i class="bi bi-snow me-1"></i>Winter Peak
               </button>
               <button type="button" class="btn btn-sm btn-outline-secondary flex-fill"
                       onclick="loadSampleForecastSummer()">
-                <i class="bi bi-sun me-1"></i>Load Sample (Summer Peak)
+                <i class="bi bi-sun me-1"></i>Summer Peak
               </button>
-            </div>
-            <div class="mb-2 d-flex gap-2">
-              <label class="btn btn-sm btn-outline-secondary flex-fill mb-0" for="csvUpload"
-                     style="cursor:pointer">
-                <i class="bi bi-upload me-1"></i>Upload CSV / Paste
-              </label>
-              <input type="file" id="csvUpload" accept=".csv,.txt" class="d-none"
-                     onchange="handleFileUpload(this)"/>
               <button type="button" class="btn btn-sm btn-outline-danger"
-                      onclick="clearForecast()">
+                      onclick="clearForecast()" title="Clear all">
                 <i class="bi bi-x-circle"></i>
               </button>
             </div>
@@ -149,35 +213,41 @@
             </div>
             <div class="form-hint mt-1">
               <i class="bi bi-info-circle me-1"></i>
-              Enter system-total forecast in MW for each hour (H01 = midnight–1AM)
+              System-total MW for each hour (H01 = midnight–1AM)
             </div>
           </div>
         </div>
 
-        <!-- STEP 3: WEATHER -->
+        <!-- STEP 3: WEATHER (AUTO-DETECTED) -->
         <div class="card-panel mt-3">
           <div class="panel-header">
             <span class="step-badge">3</span>
-            <span class="panel-title">Weather Input</span>
+            <span class="panel-title">Weather</span>
           </div>
           <div class="panel-body">
-            <div class="row g-2">
-              <div class="col-6">
-                <label class="form-label fw-600">Avg Temperature (°F)</label>
-                <input type="number" id="tempF" class="form-control form-control-custom"
-                       placeholder="e.g. 32" step="0.1" min="-20" max="110"/>
-                <div class="form-hint">Daily average</div>
-              </div>
-              <div class="col-6">
-                <label class="form-label fw-600">HDH (Override)</label>
-                <input type="number" id="hdh" class="form-control form-control-custom"
-                       placeholder="auto from °F" step="0.1" min="0" max="2000"/>
-                <div class="form-hint">Heating Degree Hours</div>
-              </div>
+
+            <!-- Auto HDH row — shown when date is selected -->
+            <div id="autoHdhRow" class="auto-hdh-bar mb-3 d-none">
+              <i class="bi bi-thermometer-half me-1"></i>
+              Auto-detected HDH for this date:
+              <strong id="autoHdhVal">–</strong>
+              <span class="text-muted ms-1">(from historical Zone A data)</span>
             </div>
-            <div class="mt-2 text-muted small">
-              <i class="bi bi-lightbulb me-1"></i>
-              HDH = Σ max(65°F − T<sub>hour</sub>, 0). Leave blank to ignore weather scoring.
+
+            <div id="noAutoHdhRow" class="text-muted small mb-3 d-none">
+              <i class="bi bi-info-circle me-1"></i>
+              No historical HDH found for this date — weather scoring disabled unless you enter HDH below.
+            </div>
+
+            <div>
+              <label class="form-label fw-600">HDH Override <span class="text-muted fw-400">(optional)</span></label>
+              <input type="number" id="hdh" class="form-control form-control-custom"
+                     placeholder="Leave blank to use auto-detected value"
+                     step="0.1" min="0" max="2000"/>
+              <div class="form-hint">
+                Heating Degree Hours = Σ max(65°F − T<sub>hour</sub>, 0).
+                Override only if you have a more accurate value.
+              </div>
             </div>
           </div>
         </div>
@@ -189,23 +259,39 @@
             <span class="panel-title">Historical Window</span>
           </div>
           <div class="panel-body">
+
+            <!-- Historical years slider -->
             <div class="mb-3">
               <label class="form-label fw-600 d-flex justify-content-between">
-                Historical Years
+                Historical Years to Search
                 <span class="badge bg-primary" id="histYearsVal">5 years</span>
               </label>
               <input type="range" class="form-range" id="histYears"
                      min="1" max="14" value="5" step="1"
                      oninput="document.getElementById('histYearsVal').textContent=this.value+' year'+(this.value>1?'s':'')"/>
+              <div class="form-hint">More years = larger analog pool, less specific to recent patterns</div>
             </div>
-            <div class="mb-2">
-              <label class="form-label fw-600 d-flex justify-content-between">
-                Month Window (±)
-                <span class="badge bg-primary" id="monthWinVal">±1 month</span>
-              </label>
-              <input type="range" class="form-range" id="monthWindow"
-                     min="0" max="3" value="1" step="1"
-                     oninput="document.getElementById('monthWinVal').textContent='±'+this.value+' month'+(this.value!=1?'s':'')"/>
+
+            <!-- Day window button group -->
+            <div>
+              <label class="form-label fw-600">Analog Search Window</label>
+              <div class="btn-group w-100 day-window-group" role="group" aria-label="Day window">
+                <input type="radio" class="btn-check" name="dayWindow" id="dw7"  value="7"/>
+                <label class="btn btn-outline-secondary" for="dw7">±7 days</label>
+
+                <input type="radio" class="btn-check" name="dayWindow" id="dw14" value="14"/>
+                <label class="btn btn-outline-secondary" for="dw14">±14 days</label>
+
+                <input type="radio" class="btn-check" name="dayWindow" id="dw30" value="30" checked/>
+                <label class="btn btn-outline-secondary" for="dw30">±1 month</label>
+
+                <input type="radio" class="btn-check" name="dayWindow" id="dw60" value="60"/>
+                <label class="btn btn-outline-secondary" for="dw60">±2 months</label>
+              </div>
+              <div class="form-hint mt-1">
+                Days around the target date to search for analog days in each historical year.
+                Narrower = more seasonal precision; wider = larger analog pool.
+              </div>
             </div>
           </div>
         </div>
@@ -225,45 +311,33 @@
               <div class="row g-2">
                 <div class="col-6">
                   <label class="form-label small">Peak Shape</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" id="wPeak" class="form-control" value="0.30"
-                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
-                  </div>
+                  <input type="number" id="wPeak" class="form-control form-control-sm"
+                         value="0.30" step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
                 </div>
                 <div class="col-6">
                   <label class="form-label small">Daily Energy</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" id="wEnergy" class="form-control" value="0.25"
-                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
-                  </div>
+                  <input type="number" id="wEnergy" class="form-control form-control-sm"
+                         value="0.25" step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
                 </div>
                 <div class="col-6">
                   <label class="form-label small">Ramp Profile</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" id="wRamp" class="form-control" value="0.15"
-                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
-                  </div>
+                  <input type="number" id="wRamp" class="form-control form-control-sm"
+                         value="0.15" step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
                 </div>
                 <div class="col-6">
                   <label class="form-label small">Downstate Load</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" id="wDownstate" class="form-control" value="0.15"
-                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
-                  </div>
+                  <input type="number" id="wDownstate" class="form-control form-control-sm"
+                         value="0.15" step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
                 </div>
                 <div class="col-6">
                   <label class="form-label small">Weather (HDH)</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" id="wWeather" class="form-control" value="0.10"
-                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
-                  </div>
+                  <input type="number" id="wWeather" class="form-control form-control-sm"
+                         value="0.10" step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
                 </div>
                 <div class="col-6">
                   <label class="form-label small">Recency</label>
-                  <div class="input-group input-group-sm">
-                    <input type="number" id="wRecency" class="form-control" value="0.05"
-                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
-                  </div>
+                  <input type="number" id="wRecency" class="form-control form-control-sm"
+                         value="0.05" step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
                 </div>
               </div>
               <div class="weight-sum-bar mt-2">
@@ -273,7 +347,7 @@
               </div>
 
               <hr class="my-3"/>
-              <div class="mb-2">
+              <div>
                 <label class="form-label small fw-600">Random Seed</label>
                 <input type="number" id="randSeed" class="form-control form-control-sm"
                        value="42" min="0" max="99999"/>
@@ -302,10 +376,10 @@
           <p class="text-muted">Fill in the form on the left and click <strong>Generate 50 Scenarios</strong>.<br>
             Results — 14 interactive charts, summary metrics, and Excel download — will appear here.</p>
           <div class="placeholder-tips">
-            <div class="tip"><i class="bi bi-1-circle-fill me-2 text-primary"></i>Enter a target date &amp; load forecast</div>
-            <div class="tip"><i class="bi bi-2-circle-fill me-2 text-primary"></i>Set weather &amp; historical window</div>
-            <div class="tip"><i class="bi bi-3-circle-fill me-2 text-primary"></i>Click generate — copula fits in seconds</div>
-            <div class="tip"><i class="bi bi-4-circle-fill me-2 text-primary"></i>Explore charts, download Excel</div>
+            <div class="tip"><i class="bi bi-1-circle-fill me-2 text-primary"></i>Pick a target date — day type &amp; weather auto-detected</div>
+            <div class="tip"><i class="bi bi-2-circle-fill me-2 text-primary"></i>Upload or paste 24-hour load forecast (CSV or Excel)</div>
+            <div class="tip"><i class="bi bi-3-circle-fill me-2 text-primary"></i>Choose historical years &amp; analog search window</div>
+            <div class="tip"><i class="bi bi-4-circle-fill me-2 text-primary"></i>Click generate — explore charts, download Excel</div>
           </div>
         </div>
       </div>
@@ -354,23 +428,12 @@
           <span class="badge bg-secondary ms-2">14 charts</span>
         </div>
 
-        <!-- Chart Category Nav -->
         <ul class="nav chart-nav mb-3" id="chartNav">
-          <li class="nav-item">
-            <a class="chart-nav-link active" href="#" data-cat="all">All Charts</a>
-          </li>
-          <li class="nav-item">
-            <a class="chart-nav-link" href="#" data-cat="scenarios">Scenario Bands</a>
-          </li>
-          <li class="nav-item">
-            <a class="chart-nav-link" href="#" data-cat="uncertainty">Uncertainty</a>
-          </li>
-          <li class="nav-item">
-            <a class="chart-nav-link" href="#" data-cat="ramps">Ramps</a>
-          </li>
-          <li class="nav-item">
-            <a class="chart-nav-link" href="#" data-cat="operations">Operations</a>
-          </li>
+          <li class="nav-item"><a class="chart-nav-link active" href="#" data-cat="all">All Charts</a></li>
+          <li class="nav-item"><a class="chart-nav-link" href="#" data-cat="scenarios">Scenario Bands</a></li>
+          <li class="nav-item"><a class="chart-nav-link" href="#" data-cat="uncertainty">Uncertainty</a></li>
+          <li class="nav-item"><a class="chart-nav-link" href="#" data-cat="ramps">Ramps</a></li>
+          <li class="nav-item"><a class="chart-nav-link" href="#" data-cat="operations">Operations</a></li>
         </ul>
 
         <div id="plotGrid" class="plot-grid"></div>
@@ -438,7 +501,7 @@
   <div class="container-fluid px-4">
     <div class="d-flex justify-content-between align-items-center py-3">
       <span class="text-muted small">
-        NYISO Gaussian Copula Scenario Generator · Gaussian Copula + Ledoit-Wolf Shrinkage · 264 Dimensions
+        NYISO Gaussian Copula Scenario Generator · Ledoit-Wolf Shrinkage · 264 Dimensions
       </span>
       <span class="text-muted small">
         For research &amp; operational planning · Not an official NYISO product

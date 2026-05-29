@@ -42,7 +42,78 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function setDefaultDate() {
   const el = document.getElementById("targetDate");
-  if (el) el.value = "2026-01-15";
+  if (!el) return;
+  el.value = "2026-01-15";
+  // Trigger date info lookup for the default date
+  fetchDateInfo();
+}
+
+// ── Date info: auto-detect day type + weather ─────────────────────────────────
+async function fetchDateInfo() {
+  const dateEl  = document.getElementById("targetDate");
+  const date    = dateEl?.value;
+  const card    = document.getElementById("dateInfoCard");
+  const spinner = document.getElementById("dateInfoSpinner");
+  const autoHdhRow    = document.getElementById("autoHdhRow");
+  const noAutoHdhRow  = document.getElementById("noAutoHdhRow");
+
+  if (!date) {
+    card?.classList.add("d-none");
+    autoHdhRow?.classList.add("d-none");
+    noAutoHdhRow?.classList.add("d-none");
+    return;
+  }
+
+  // Show card with spinner while loading
+  card?.classList.remove("d-none");
+  spinner?.classList.remove("d-none");
+
+  try {
+    const res = await fetch(`/api/date-info?date=${encodeURIComponent(date)}`);
+    const d   = await res.json();
+
+    if (d.error) {
+      spinner?.classList.add("d-none");
+      return;
+    }
+
+    // Date + weekday label
+    document.getElementById("dateDisplayLabel").textContent = d.date_display || "";
+    document.getElementById("weekdayNameLabel").textContent = d.weekday_name || "";
+
+    // Day type pill
+    const pill = document.getElementById("dayTypePill");
+    const pillClasses = { weekday: "pill-weekday", weekend: "pill-weekend", holiday: "pill-holiday" };
+    const pillIcons   = { weekday: "bi-calendar-week", weekend: "bi-calendar-weekend", holiday: "bi-star-fill" };
+    const dt = d.day_type || "weekday";
+    pill.className = `day-type-pill ${pillClasses[dt] || "pill-weekday"}`;
+    pill.innerHTML = `<i class="bi ${pillIcons[dt] || "bi-calendar"}"></i> ${dt.charAt(0).toUpperCase() + dt.slice(1)}`;
+
+    // Holiday name
+    const hn = document.getElementById("holidayNameLabel");
+    if (d.holiday_name) {
+      hn.textContent = `— ${d.holiday_name}`;
+      hn.classList.remove("d-none");
+    } else {
+      hn.classList.add("d-none");
+    }
+
+    // Auto HDH
+    if (d.hdh !== null && d.hdh !== undefined) {
+      document.getElementById("autoHdhVal").textContent = `${d.hdh} HDH`;
+      autoHdhRow?.classList.remove("d-none");
+      noAutoHdhRow?.classList.add("d-none");
+    } else {
+      autoHdhRow?.classList.add("d-none");
+      noAutoHdhRow?.classList.remove("d-none");
+    }
+
+    spinner?.classList.add("d-none");
+
+  } catch (err) {
+    spinner?.classList.add("d-none");
+    console.warn("date-info fetch failed:", err);
+  }
 }
 
 // ── Data status check ─────────────────────────────────────────────────────────
@@ -56,8 +127,7 @@ async function checkDataStatus() {
       badge.innerHTML = `<i class="bi bi-circle-fill me-1"></i> Data Ready (${d.zones_found.length}/11 Zones)`;
     } else {
       badge.className = "status-badge status-error";
-      const missing = d.zones_missing.length;
-      badge.innerHTML = `<i class="bi bi-exclamation-circle-fill me-1"></i> ${missing} Zone(s) Missing`;
+      badge.innerHTML = `<i class="bi bi-exclamation-circle-fill me-1"></i> ${d.zones_missing.length} Zone(s) Missing`;
     }
   } catch {
     badge.className = "status-badge status-error";
@@ -108,24 +178,50 @@ function loadSampleForecast()       { setForecast24(SAMPLE_WINTER); }
 function loadSampleForecastSummer() { setForecast24(SAMPLE_SUMMER); }
 function clearForecast()            { setForecast24(Array(24).fill("")); }
 
-// ── CSV upload ────────────────────────────────────────────────────────────────
-function handleFileUpload(input) {
+// ── File upload (CSV, TXT, or XLSX) ──────────────────────────────────────────
+async function handleFileUpload(input) {
   const file = input.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const text = e.target.result;
-    const nums = text.split(/[\n,;\t\s]+/)
-      .map(s => parseFloat(s.trim()))
-      .filter(n => !isNaN(n));
-    if (nums.length >= 24) {
-      setForecast24(nums.slice(0, 24));
-      showToast(`Loaded ${Math.min(nums.length, 24)} values from file`, "success");
-    } else {
-      showToast(`Found only ${nums.length} values — need 24`, "error");
+
+  const name = file.name.toLowerCase();
+  const filenameEl = document.getElementById("uploadFilename");
+
+  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    // Send to server for Excel parsing
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      showToast("Parsing Excel file…", "info");
+      const res = await fetch("/api/upload-forecast", { method: "POST", body: formData });
+      const d   = await res.json();
+      if (d.success && d.values && d.values.length >= 24) {
+        setForecast24(d.values.slice(0, 24));
+        if (filenameEl) { filenameEl.textContent = `✓ ${file.name}`; filenameEl.classList.remove("d-none"); }
+        showToast(`Loaded 24 values from ${file.name}`, "success");
+      } else {
+        showToast(d.error || "Could not extract 24 MW values from file", "error");
+      }
+    } catch (err) {
+      showToast(`Upload failed: ${err.message}`, "error");
     }
-  };
-  reader.readAsText(file);
+  } else {
+    // CSV / TXT — parse client-side
+    const reader = new FileReader();
+    reader.onload = e => {
+      const text = e.target.result;
+      const nums = text.split(/[\n,;\t\s]+/)
+        .map(s => parseFloat(s.trim()))
+        .filter(n => !isNaN(n) && n > 0);
+      if (nums.length >= 24) {
+        setForecast24(nums.slice(0, 24));
+        if (filenameEl) { filenameEl.textContent = `✓ ${file.name}`; filenameEl.classList.remove("d-none"); }
+        showToast(`Loaded 24 values from ${file.name}`, "success");
+      } else {
+        showToast(`Found only ${nums.length} valid values — need 24`, "error");
+      }
+    };
+    reader.readAsText(file);
+  }
   input.value = "";
 }
 
@@ -133,10 +229,9 @@ function handleFileUpload(input) {
 function updateWeightSum() {
   const ids = ["wPeak", "wEnergy", "wRamp", "wDownstate", "wWeather", "wRecency"];
   const sum = ids.reduce((acc, id) => {
-    const v = parseFloat(document.getElementById(id)?.value) || 0;
-    return acc + v;
+    return acc + (parseFloat(document.getElementById(id)?.value) || 0);
   }, 0);
-  const sumEl = document.getElementById("weightSumVal");
+  const sumEl  = document.getElementById("weightSumVal");
   const warnEl = document.getElementById("weightSumWarn");
   if (!sumEl) return;
   sumEl.textContent = sum.toFixed(2);
@@ -152,8 +247,7 @@ function setupChartNav() {
       e.preventDefault();
       document.querySelectorAll(".chart-nav-link").forEach(l => l.classList.remove("active"));
       link.classList.add("active");
-      const cat = link.dataset.cat;
-      filterCharts(cat);
+      filterCharts(link.dataset.cat);
     });
   });
 }
@@ -167,12 +261,9 @@ function filterCharts(cat) {
       card.style.display = ids.includes(card.dataset.plotId) ? "" : "none";
     }
   });
-  // Re-relayout visible Plotly charts to fix sizing
   setTimeout(() => {
     document.querySelectorAll(".plot-container[data-plot-id]").forEach(el => {
-      if (el.closest(".plot-card").style.display !== "none") {
-        Plotly.Plots.resize(el);
-      }
+      if (el.closest(".plot-card").style.display !== "none") Plotly.Plots.resize(el);
     });
   }, 50);
 }
@@ -184,12 +275,8 @@ let loadTimer = null;
 function animateLoadingSteps() {
   const steps = LOAD_STEPS.map(id => document.getElementById(id));
   steps.forEach((s, i) => {
-    if (i === 0) {
-      s?.classList.add("active");
-    } else {
-      s?.classList.remove("active", "done");
-      s?.querySelector("i")?.className.replace(/bi-\S+/, "bi-circle");
-    }
+    if (i === 0) s?.classList.add("active");
+    else { s?.classList.remove("active", "done"); }
   });
 
   let idx = 0;
@@ -219,50 +306,46 @@ function stopLoadingAnimation() {
 
 // ── MAIN: Generate scenarios ──────────────────────────────────────────────────
 async function generateScenarios() {
-  const btn = document.getElementById("generateBtn");
+  const btn        = document.getElementById("generateBtn");
   const targetDate = document.getElementById("targetDate")?.value;
 
-  // Validate
   if (!targetDate) {
     showToast("Please select a target date", "error");
     return;
   }
 
   const forecast24h = getForecast24();
-  const nonZero = forecast24h.filter(v => v > 0).length;
-  if (nonZero < 12) {
+  if (forecast24h.filter(v => v > 0).length < 12) {
     showToast("Please enter at least 12 hourly forecast values (MW)", "error");
     return;
   }
 
-  // Collect form data
-  const dayType       = document.querySelector('input[name="dayType"]:checked')?.value || "weekday";
-  const histYears     = parseInt(document.getElementById("histYears")?.value || "5");
-  const monthWindow   = parseInt(document.getElementById("monthWindow")?.value || "1");
-  const tempF         = parseFloat(document.getElementById("tempF")?.value) || null;
-  const hdhOverride   = parseFloat(document.getElementById("hdh")?.value) || null;
-  const seed          = parseInt(document.getElementById("randSeed")?.value || "42");
-  const wPeak         = parseFloat(document.getElementById("wPeak")?.value || "0.30");
-  const wEnergy       = parseFloat(document.getElementById("wEnergy")?.value || "0.25");
-  const wRamp         = parseFloat(document.getElementById("wRamp")?.value || "0.15");
-  const wDownstate    = parseFloat(document.getElementById("wDownstate")?.value || "0.15");
-  const wWeather      = parseFloat(document.getElementById("wWeather")?.value || "0.10");
-  const wRecency      = parseFloat(document.getElementById("wRecency")?.value || "0.05");
+  const dayWindow   = parseInt(document.querySelector('input[name="dayWindow"]:checked')?.value || "30");
+  const histYears   = parseInt(document.getElementById("histYears")?.value || "5");
+  const hdhOverride = parseFloat(document.getElementById("hdh")?.value) || null;
+  const seed        = parseInt(document.getElementById("randSeed")?.value || "42");
+  const wPeak       = parseFloat(document.getElementById("wPeak")?.value    || "0.30");
+  const wEnergy     = parseFloat(document.getElementById("wEnergy")?.value  || "0.25");
+  const wRamp       = parseFloat(document.getElementById("wRamp")?.value    || "0.15");
+  const wDownstate  = parseFloat(document.getElementById("wDownstate")?.value || "0.15");
+  const wWeather    = parseFloat(document.getElementById("wWeather")?.value || "0.10");
+  const wRecency    = parseFloat(document.getElementById("wRecency")?.value || "0.05");
 
   const payload = {
-    target_date: targetDate,
-    forecast_24h: forecast24h,
-    day_type: dayType,
+    target_date:      targetDate,
+    forecast_24h:     forecast24h,
     historical_years: histYears,
-    month_window: monthWindow,
+    day_window:       dayWindow,
     seed,
-    w_peak: wPeak, w_energy: wEnergy, w_ramp: wRamp,
-    w_downstate: wDownstate, w_weather: wWeather, w_recency: wRecency,
+    w_peak:      wPeak,
+    w_energy:    wEnergy,
+    w_ramp:      wRamp,
+    w_downstate: wDownstate,
+    w_weather:   wWeather,
+    w_recency:   wRecency,
   };
-  if (tempF !== null && !isNaN(tempF))  payload.temperature_f = tempF;
   if (hdhOverride !== null && !isNaN(hdhOverride)) payload.hdh = hdhOverride;
 
-  // UI transitions
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Running Copula…`;
   showSection("loading");
@@ -270,9 +353,9 @@ async function generateScenarios() {
 
   try {
     const res = await fetch("/api/generate", {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body:    JSON.stringify(payload),
     });
 
     const data = await res.json();
@@ -303,9 +386,7 @@ function showSection(section, errorMsg = "") {
   document.getElementById("resultsPlaceholder")?.classList.add("d-none");
   document.getElementById("loadingState")?.classList.add("d-none");
   document.getElementById("resultsSection")?.classList.add("d-none");
-
-  const errorEl = document.getElementById("errorSection");
-  if (errorEl) errorEl.remove();
+  document.getElementById("errorSection")?.remove();
 
   if (section === "loading") {
     document.getElementById("loadingState")?.classList.remove("d-none");
@@ -321,7 +402,7 @@ function showSection(section, errorMsg = "") {
       <div class="error-msg">${escapeHtml(errorMsg)}</div>
       <div class="mt-3 text-muted small">
         <strong>Common fixes:</strong> Verify data files are in <code>data/</code>,
-        increase historical years, or widen the month window.
+        increase historical years, or widen the analog search window.
       </div>`;
     const right = document.querySelector(".col-xl-8, .col-lg-7");
     if (right) right.prepend(div);
@@ -343,58 +424,18 @@ function renderKPICards(m) {
   if (!container) return;
 
   const kpis = [
-    {
-      label: "Analog Days Used",
-      value: m.n_analogs.toLocaleString(),
-      sub: `${m.historical_years || "–"}yr window`,
-      cls: "kpi-navy",
-    },
-    {
-      label: "Copula Dimensions",
-      value: m.n_dimensions,
-      sub: "11 zones × 24 hours",
-      cls: "kpi-purple",
-    },
-    {
-      label: "LW Shrinkage",
-      value: m.shrink_coeff,
-      sub: "Ledoit-Wolf coefficient",
-      cls: "",
-    },
-    {
-      label: "Mean Daily Energy",
-      value: `${(m.daily_E_mean / 1000).toFixed(1)}k`,
-      sub: `P05: ${(m.daily_E_p05 / 1000).toFixed(1)}k · P95: ${(m.daily_E_p95 / 1000).toFixed(1)}k MWh`,
-      cls: "kpi-green",
-    },
-    {
-      label: "Most Likely Peak Hour",
-      value: `H${String(m.peak_hr_mode).padStart(2, "0")}`,
-      sub: `${m.peak_hr_mode_pct}% probability`,
-      cls: "kpi-gold",
-    },
-    {
-      label: "Adj-Hour Correlation",
-      value: m.adj_corr_mean.toFixed(3),
-      sub: "Temporal structure (≈1.0 = realistic)",
-      cls: "kpi-orange",
-    },
-    {
-      label: "Spread CRPS",
-      value: `${m.mean_crps.toFixed(0)} MW`,
-      sub: "Mean hourly spread metric",
-      cls: "kpi-red",
-    },
-    {
-      label: "Scenarios Generated",
-      value: m.n_scenarios,
-      sub: `P = ${(1 / m.n_scenarios).toFixed(4)} each`,
-      cls: "",
-    },
+    { label: "Analog Days Used",       value: m.n_analogs.toLocaleString(),     sub: `${m.historical_years || "–"}yr window`,               cls: "kpi-navy"   },
+    { label: "Copula Dimensions",       value: m.n_dimensions,                   sub: "11 zones × 24 hours",                                  cls: "kpi-purple" },
+    { label: "LW Shrinkage",            value: m.shrink_coeff,                   sub: "Ledoit-Wolf coefficient",                              cls: ""           },
+    { label: "Mean Daily Energy",       value: `${(m.daily_E_mean/1000).toFixed(1)}k`, sub: `P05: ${(m.daily_E_p05/1000).toFixed(1)}k · P95: ${(m.daily_E_p95/1000).toFixed(1)}k MWh`, cls: "kpi-green" },
+    { label: "Most Likely Peak Hour",   value: `H${String(m.peak_hr_mode).padStart(2,"0")}`, sub: `${m.peak_hr_mode_pct}% probability`,       cls: "kpi-gold"   },
+    { label: "Adj-Hour Correlation",    value: m.adj_corr_mean.toFixed(3),       sub: "Temporal structure (≈1.0 = realistic)",                cls: "kpi-orange" },
+    { label: "Spread CRPS",             value: `${m.mean_crps.toFixed(0)} MW`,   sub: "Mean hourly spread metric",                           cls: "kpi-red"    },
+    { label: "Scenarios Generated",     value: m.n_scenarios,                    sub: `P = ${(1/m.n_scenarios).toFixed(4)} each`,             cls: ""           },
   ];
 
   container.innerHTML = kpis.map((k, i) => `
-    <div class="col-xl-3 col-md-4 col-6 fade-in fade-in-delay-${Math.min(i + 1, 3)}">
+    <div class="col-xl-3 col-md-4 col-6 fade-in fade-in-delay-${Math.min(i+1,3)}">
       <div class="kpi-card ${k.cls}">
         <div class="kpi-label">${k.label}</div>
         <div class="kpi-value">${k.value}</div>
@@ -428,41 +469,29 @@ function renderPlots(plots) {
 
   plots.forEach((p, idx) => {
     const isWide = WIDE_CHARTS.includes(p.id);
-    const icon = CHART_ICONS[p.id] || "bi-graph-up";
-    const containerId = `pc_${p.id}`;
+    const icon   = CHART_ICONS[p.id] || "bi-graph-up";
+    const cid    = `pc_${p.id}`;
 
     const card = document.createElement("div");
-    card.className = `plot-card${isWide ? " wide" : ""} fade-in`;
+    card.className  = `plot-card${isWide ? " wide" : ""} fade-in`;
     card.dataset.plotId = p.id;
     card.style.animationDelay = `${0.05 * idx}s`;
     card.innerHTML = `
       <div class="plot-card-header">
-        <span class="plot-card-title">
-          <i class="bi ${icon} me-2"></i>${p.title}
-        </span>
-        <button class="btn-expand" onclick="expandChart('${containerId}', '${escapeHtml(p.title)}')" title="Expand">
+        <span class="plot-card-title"><i class="bi ${icon} me-2"></i>${p.title}</span>
+        <button class="btn-expand" onclick="expandChart('${cid}','${escapeHtml(p.title)}')" title="Expand">
           <i class="bi bi-fullscreen"></i>
         </button>
       </div>
-      <div class="plot-container" id="${containerId}" data-plot-id="${p.id}"></div>`;
+      <div class="plot-container" id="${cid}" data-plot-id="${p.id}"></div>`;
     grid.appendChild(card);
 
-    const layout = {
-      ...p.layout,
-      autosize: true,
-      height: isWide ? 420 : 350,
-    };
-
-    Plotly.newPlot(containerId, p.data, layout, {
+    Plotly.newPlot(cid, p.data, { ...p.layout, autosize: true, height: isWide ? 420 : 350 }, {
       responsive: true,
       displayModeBar: true,
       modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"],
       displaylogo: false,
-      toImageButtonOptions: {
-        format: "png",
-        filename: `NYISO_${p.id}`,
-        scale: 2,
-      },
+      toImageButtonOptions: { format: "png", filename: `NYISO_${p.id}`, scale: 2 },
     });
   });
 }
@@ -472,19 +501,14 @@ function expandChart(containerId, title) {
   const src = document.getElementById(containerId);
   if (!src || !src._fullLayout) return;
 
-  // Remove existing modal if any
   document.getElementById("chartModal")?.remove();
 
   const modal = document.createElement("div");
   modal.id = "chartModal";
-  modal.style.cssText = `
-    position:fixed;inset:0;background:rgba(11,31,58,.85);z-index:9999;
-    display:flex;align-items:center;justify-content:center;padding:20px;`;
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(11,31,58,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
   modal.innerHTML = `
-    <div style="background:white;border-radius:12px;width:100%;max-width:1100px;
-                box-shadow:0 25px 60px rgba(0,0,0,.4);overflow:hidden;">
-      <div style="display:flex;align-items:center;justify-content:space-between;
-                  padding:12px 20px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+    <div style="background:white;border-radius:12px;width:100%;max-width:1100px;box-shadow:0 25px 60px rgba(0,0,0,.4);overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
         <strong style="color:#0B1F3A">${title}</strong>
         <button onclick="document.getElementById('chartModal').remove()"
                 style="background:none;border:none;font-size:20px;cursor:pointer;color:#94A3B8">
@@ -496,7 +520,6 @@ function expandChart(containerId, title) {
   document.body.appendChild(modal);
   modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
 
-  const data = Plotly.d3.select(src).node().__data__[0];
   Plotly.newPlot("expandedChart",
     JSON.parse(JSON.stringify(src.data)),
     { ...JSON.parse(JSON.stringify(src.layout)), height: 520, autosize: true },
@@ -506,27 +529,20 @@ function expandChart(containerId, title) {
 
 // ── Analog table ──────────────────────────────────────────────────────────────
 function renderAnalogTable(m) {
-  // The metrics dict doesn't carry analog_df directly; we only have what was computed.
-  // We show the top analog info from what we have — if the server returns analog_scores we use it.
-  // For now display a summary note.
   const thead = document.querySelector("#analogTable thead");
   const tbody = document.querySelector("#analogTable tbody");
   if (!thead || !tbody) return;
 
-  // We don't have analog_df in metrics dict — it will be in the Excel file.
-  // Show informational row.
-  thead.innerHTML = `<tr>
-    <th>Rank</th><th>Metric</th><th>Value</th>
-  </tr>`;
+  thead.innerHTML = `<tr><th>Rank</th><th>Metric</th><th>Value</th></tr>`;
   const rows = [
-    ["#1", "Analog Pool Size", `${m.n_analogs} matching days`],
-    ["#2", "Ledoit-Wolf Shrinkage", m.shrink_coeff],
-    ["#3", "Copula Dimensions", `${m.n_dimensions} (11 zones × 24 hr)`],
-    ["#4", "Adj-Hour Corr (avg)", m.adj_corr_mean.toFixed(4)],
-    ["#5", "Scenario Mean Daily Energy", `${m.daily_E_mean.toLocaleString()} MWh`],
-    ["#6", "Daily Energy P05 – P95", `${m.daily_E_p05.toLocaleString()} – ${m.daily_E_p95.toLocaleString()} MWh`],
-    ["#7", "Most Likely Peak Hour", `H${String(m.peak_hr_mode).padStart(2,"0")} (${m.peak_hr_mode_pct}%)`],
-    ["#8", "Spread CRPS (mean)", `${m.mean_crps.toFixed(1)} MW`],
+    ["#1", "Analog Pool Size",           `${m.n_analogs} matching days`],
+    ["#2", "Ledoit-Wolf Shrinkage",       m.shrink_coeff],
+    ["#3", "Copula Dimensions",           `${m.n_dimensions} (11 zones × 24 hr)`],
+    ["#4", "Adj-Hour Corr (avg)",         m.adj_corr_mean.toFixed(4)],
+    ["#5", "Scenario Mean Daily Energy",  `${m.daily_E_mean.toLocaleString()} MWh`],
+    ["#6", "Daily Energy P05 – P95",      `${m.daily_E_p05.toLocaleString()} – ${m.daily_E_p95.toLocaleString()} MWh`],
+    ["#7", "Most Likely Peak Hour",       `H${String(m.peak_hr_mode).padStart(2,"0")} (${m.peak_hr_mode_pct}%)`],
+    ["#8", "Spread CRPS (mean)",          `${m.mean_crps.toFixed(1)} MW`],
   ];
   tbody.innerHTML = rows.map(([rank, metric, val], i) => `
     <tr>
@@ -543,45 +559,28 @@ function downloadExcel() {
     return;
   }
   const btn = document.getElementById("downloadBtn");
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Preparing…`;
-  }
+  if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Preparing…`; }
+
   const link = document.createElement("a");
-  link.href = `/api/download/${currentSessionId}`;
+  link.href     = `/api/download/${currentSessionId}`;
   link.download = "NYISO_GC50_Scenarios.xlsx";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 
   setTimeout(() => {
-    if (btn) {
-      btn.disabled = false;
-      btn.innerHTML = `<i class="bi bi-download me-2"></i>Download Excel`;
-    }
+    if (btn) { btn.disabled = false; btn.innerHTML = `<i class="bi bi-download me-2"></i>Download Excel`; }
     showToast("Excel file downloaded", "success");
   }, 1500);
 }
 
 // ── Toast notification ────────────────────────────────────────────────────────
 function showToast(msg, type = "info") {
-  const colors = {
-    success: "#1D9E75",
-    error:   "#DC3545",
-    info:    "#0D9488",
-  };
-  const icons = { success: "bi-check-circle-fill", error: "bi-x-circle-fill", info: "bi-info-circle-fill" };
+  const colors = { success: "#1D9E75", error: "#DC3545", info: "#0D9488" };
+  const icons  = { success: "bi-check-circle-fill", error: "bi-x-circle-fill", info: "bi-info-circle-fill" };
 
   const toast = document.createElement("div");
-  toast.style.cssText = `
-    position:fixed;bottom:24px;right:24px;z-index:10000;
-    background:white;border-left:4px solid ${colors[type]};
-    border-radius:8px;padding:12px 18px;
-    box-shadow:0 8px 24px rgba(0,0,0,.12);
-    display:flex;align-items:center;gap:10px;
-    font-size:13px;font-weight:600;color:#0B1F3A;
-    animation:fadeInUp .3s ease;
-    max-width:340px;`;
+  toast.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:10000;background:white;border-left:4px solid ${colors[type]};border-radius:8px;padding:12px 18px;box-shadow:0 8px 24px rgba(0,0,0,.12);display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#0B1F3A;animation:fadeInUp .3s ease;max-width:340px;`;
   toast.innerHTML = `<i class="bi ${icons[type]}" style="color:${colors[type]};font-size:16px"></i>${escapeHtml(msg)}`;
   document.body.appendChild(toast);
   setTimeout(() => {
