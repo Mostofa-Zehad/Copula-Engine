@@ -1,0 +1,10 @@
+# Place your Zone data files here:
+#
+#   Zone A Combined Data (Full Year 2011-2025).xlsx
+#   Zone B Combined Data (Full Year 2011-2025).xlsx
+#   ...
+#   Zone K Combined Data (Full Year 2011-2025).xlsx
+#   Holiday Calendar Full Year (2011-2025).xlsx
+#
+# These files are NOT committed to git (too large).
+# Copy them manually from your local data directory.

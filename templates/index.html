@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NYISO Copula Scenario Generator | Load Uncertainty</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HERO HEADER ═══════════════════════════════ -->
+<header class="site-header">
+  <div class="container-fluid px-4">
+    <div class="d-flex align-items-center justify-content-between py-3">
+      <div class="d-flex align-items-center gap-3">
+        <div class="header-logo">
+          <i class="bi bi-lightning-charge-fill fs-4"></i>
+        </div>
+        <div>
+          <div class="header-title">NYISO Copula Scenario Generator</div>
+          <div class="header-sub">Gaussian Copula · 11-Zone Load Uncertainty · Probabilistic Forecasting</div>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <span class="badge-version">GC-50 v2.0</span>
+        <span id="statusBadge" class="status-badge status-checking">
+          <i class="bi bi-circle-fill me-1"></i> Checking…
+        </span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════ HERO BANNER ═══════════════════════════════ -->
+<section class="hero-section">
+  <div class="container-fluid px-4">
+    <div class="row align-items-center">
+      <div class="col-lg-8">
+        <h1 class="hero-title">Load Uncertainty Quantification<br>with Gaussian Copula</h1>
+        <p class="hero-desc">
+          Generate <strong>50 probabilistic load scenarios</strong> for any day of the year using a
+          Gaussian Copula fitted to historical NYISO 11-zone load errors. Captures
+          <em>cross-zone dependencies</em>, <em>hour-to-hour correlations</em>, and
+          <em>weather-adjusted analog day selection</em> — the same rigorous methodology
+          used in power system operations research.
+        </p>
+        <div class="hero-stats">
+          <div class="hero-stat"><span class="stat-num">11</span><span class="stat-lbl">NYISO Zones</span></div>
+          <div class="hero-stat"><span class="stat-num">264</span><span class="stat-lbl">Copula Dimensions</span></div>
+          <div class="hero-stat"><span class="stat-num">50</span><span class="stat-lbl">Scenarios</span></div>
+          <div class="hero-stat"><span class="stat-num">14</span><span class="stat-lbl">Analysis Charts</span></div>
+          <div class="hero-stat"><span class="stat-num">2011–2025</span><span class="stat-lbl">Historical Data</span></div>
+        </div>
+      </div>
+      <div class="col-lg-4 d-none d-lg-block text-end">
+        <div class="hero-diagram">
+          <div class="copula-box">
+            <div class="copula-label">Historical Errors</div>
+            <div class="copula-arrow">↓</div>
+            <div class="copula-core">Gaussian Copula<br><small>Ledoit-Wolf Σ</small></div>
+            <div class="copula-arrow">↓</div>
+            <div class="copula-label">50 Load Scenarios</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ MAIN CONTENT ══════════════════════════════ -->
+<main class="container-fluid px-4 my-4">
+  <div class="row g-4">
+
+    <!-- ────────── LEFT: INPUT FORM ──────────── -->
+    <div class="col-xl-4 col-lg-5">
+      <form id="copulaForm" novalidate>
+
+        <!-- STEP 1: DATE & DAY TYPE -->
+        <div class="card-panel">
+          <div class="panel-header">
+            <span class="step-badge">1</span>
+            <span class="panel-title">Target Date &amp; Day Type</span>
+          </div>
+          <div class="panel-body">
+            <div class="mb-3">
+              <label class="form-label fw-600">Target Date</label>
+              <input type="date" id="targetDate" class="form-control form-control-custom"
+                     min="2011-01-01" max="2025-12-31" required/>
+              <div class="form-hint">Select any date within the 2011–2025 data range</div>
+            </div>
+            <div class="mb-2">
+              <label class="form-label fw-600">Day Type</label>
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="dayType" id="dtWeekday" value="weekday" checked/>
+                <label class="btn btn-outline-primary btn-toggle" for="dtWeekday">
+                  <i class="bi bi-calendar-week me-1"></i>Weekday
+                </label>
+                <input type="radio" class="btn-check" name="dayType" id="dtWeekend" value="weekend"/>
+                <label class="btn btn-outline-primary btn-toggle" for="dtWeekend">
+                  <i class="bi bi-calendar-weekend me-1"></i>Weekend
+                </label>
+                <input type="radio" class="btn-check" name="dayType" id="dtHoliday" value="holiday"/>
+                <label class="btn btn-outline-primary btn-toggle" for="dtHoliday">
+                  <i class="bi bi-star me-1"></i>Holiday
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: FORECAST INPUT -->
+        <div class="card-panel mt-3">
+          <div class="panel-header">
+            <span class="step-badge">2</span>
+            <span class="panel-title">24-Hour Forecast (MW)</span>
+          </div>
+          <div class="panel-body">
+            <div class="mb-2 d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary flex-fill"
+                      onclick="loadSampleForecast()">
+                <i class="bi bi-lightning me-1"></i>Load Sample (Winter Peak)
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary flex-fill"
+                      onclick="loadSampleForecastSummer()">
+                <i class="bi bi-sun me-1"></i>Load Sample (Summer Peak)
+              </button>
+            </div>
+            <div class="mb-2 d-flex gap-2">
+              <label class="btn btn-sm btn-outline-secondary flex-fill mb-0" for="csvUpload"
+                     style="cursor:pointer">
+                <i class="bi bi-upload me-1"></i>Upload CSV / Paste
+              </label>
+              <input type="file" id="csvUpload" accept=".csv,.txt" class="d-none"
+                     onchange="handleFileUpload(this)"/>
+              <button type="button" class="btn btn-sm btn-outline-danger"
+                      onclick="clearForecast()">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </div>
+
+            <!-- 24-cell grid -->
+            <div class="forecast-grid" id="forecastGrid">
+              <!-- Filled by JS -->
+            </div>
+            <div class="form-hint mt-1">
+              <i class="bi bi-info-circle me-1"></i>
+              Enter system-total forecast in MW for each hour (H01 = midnight–1AM)
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3: WEATHER -->
+        <div class="card-panel mt-3">
+          <div class="panel-header">
+            <span class="step-badge">3</span>
+            <span class="panel-title">Weather Input</span>
+          </div>
+          <div class="panel-body">
+            <div class="row g-2">
+              <div class="col-6">
+                <label class="form-label fw-600">Avg Temperature (°F)</label>
+                <input type="number" id="tempF" class="form-control form-control-custom"
+                       placeholder="e.g. 32" step="0.1" min="-20" max="110"/>
+                <div class="form-hint">Daily average</div>
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-600">HDH (Override)</label>
+                <input type="number" id="hdh" class="form-control form-control-custom"
+                       placeholder="auto from °F" step="0.1" min="0" max="2000"/>
+                <div class="form-hint">Heating Degree Hours</div>
+              </div>
+            </div>
+            <div class="mt-2 text-muted small">
+              <i class="bi bi-lightbulb me-1"></i>
+              HDH = Σ max(65°F − T<sub>hour</sub>, 0). Leave blank to ignore weather scoring.
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: HISTORICAL SETTINGS -->
+        <div class="card-panel mt-3">
+          <div class="panel-header">
+            <span class="step-badge">4</span>
+            <span class="panel-title">Historical Window</span>
+          </div>
+          <div class="panel-body">
+            <div class="mb-3">
+              <label class="form-label fw-600 d-flex justify-content-between">
+                Historical Years
+                <span class="badge bg-primary" id="histYearsVal">5 years</span>
+              </label>
+              <input type="range" class="form-range" id="histYears"
+                     min="1" max="14" value="5" step="1"
+                     oninput="document.getElementById('histYearsVal').textContent=this.value+' year'+(this.value>1?'s':'')"/>
+            </div>
+            <div class="mb-2">
+              <label class="form-label fw-600 d-flex justify-content-between">
+                Month Window (±)
+                <span class="badge bg-primary" id="monthWinVal">±1 month</span>
+              </label>
+              <input type="range" class="form-range" id="monthWindow"
+                     min="0" max="3" value="1" step="1"
+                     oninput="document.getElementById('monthWinVal').textContent='±'+this.value+' month'+(this.value!=1?'s':'')"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 5: ADVANCED (COLLAPSIBLE) -->
+        <div class="card-panel mt-3">
+          <button class="panel-header w-100 text-start border-0 bg-transparent"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#advancedPanel" aria-expanded="false">
+            <span class="step-badge">5</span>
+            <span class="panel-title">Advanced Settings</span>
+            <i class="bi bi-chevron-down ms-auto text-muted"></i>
+          </button>
+          <div class="collapse" id="advancedPanel">
+            <div class="panel-body pt-0">
+              <div class="fw-600 mb-2 text-muted small">ANALOG SCORING WEIGHTS (must sum to 1.00)</div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="form-label small">Peak Shape</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" id="wPeak" class="form-control" value="0.30"
+                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small">Daily Energy</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" id="wEnergy" class="form-control" value="0.25"
+                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small">Ramp Profile</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" id="wRamp" class="form-control" value="0.15"
+                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small">Downstate Load</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" id="wDownstate" class="form-control" value="0.15"
+                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small">Weather (HDH)</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" id="wWeather" class="form-control" value="0.10"
+                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label small">Recency</label>
+                  <div class="input-group input-group-sm">
+                    <input type="number" id="wRecency" class="form-control" value="0.05"
+                           step="0.01" min="0" max="1" onchange="updateWeightSum()"/>
+                  </div>
+                </div>
+              </div>
+              <div class="weight-sum-bar mt-2">
+                <small>Weight sum: </small>
+                <strong id="weightSumVal" class="text-success">1.00</strong>
+                <span id="weightSumWarn" class="text-danger d-none"> ⚠ Auto-normalized on run</span>
+              </div>
+
+              <hr class="my-3"/>
+              <div class="mb-2">
+                <label class="form-label small fw-600">Random Seed</label>
+                <input type="number" id="randSeed" class="form-control form-control-sm"
+                       value="42" min="0" max="99999"/>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- GENERATE BUTTON -->
+        <button type="button" id="generateBtn" class="btn btn-generate w-100 mt-3"
+                onclick="generateScenarios()">
+          <i class="bi bi-cpu me-2"></i>Generate 50 Scenarios
+        </button>
+
+      </form>
+    </div>
+
+    <!-- ────────── RIGHT: RESULTS ──────────── -->
+    <div class="col-xl-8 col-lg-7">
+
+      <!-- PLACEHOLDER -->
+      <div id="resultsPlaceholder" class="results-placeholder">
+        <div class="placeholder-inner">
+          <i class="bi bi-graph-up-arrow placeholder-icon"></i>
+          <h4>Ready to Generate</h4>
+          <p class="text-muted">Fill in the form on the left and click <strong>Generate 50 Scenarios</strong>.<br>
+            Results — 14 interactive charts, summary metrics, and Excel download — will appear here.</p>
+          <div class="placeholder-tips">
+            <div class="tip"><i class="bi bi-1-circle-fill me-2 text-primary"></i>Enter a target date &amp; load forecast</div>
+            <div class="tip"><i class="bi bi-2-circle-fill me-2 text-primary"></i>Set weather &amp; historical window</div>
+            <div class="tip"><i class="bi bi-3-circle-fill me-2 text-primary"></i>Click generate — copula fits in seconds</div>
+            <div class="tip"><i class="bi bi-4-circle-fill me-2 text-primary"></i>Explore charts, download Excel</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOADING STATE -->
+      <div id="loadingState" class="d-none">
+        <div class="loading-card">
+          <div class="loading-spinner">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring ring-2"></div>
+          </div>
+          <h5 class="mt-4 mb-2">Fitting Gaussian Copula…</h5>
+          <div class="loading-steps">
+            <div class="loading-step active" id="ls1"><i class="bi bi-check-circle-fill me-2"></i>Loading historical zone data</div>
+            <div class="loading-step" id="ls2"><i class="bi bi-circle me-2"></i>Scoring analog days</div>
+            <div class="loading-step" id="ls3"><i class="bi bi-circle me-2"></i>Fitting Ledoit-Wolf copula (264D)</div>
+            <div class="loading-step" id="ls4"><i class="bi bi-circle me-2"></i>Drawing 50 dependent scenarios</div>
+            <div class="loading-step" id="ls5"><i class="bi bi-circle me-2"></i>Computing metrics &amp; charts</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div id="resultsSection" class="d-none">
+
+        <!-- KPI CARDS -->
+        <div class="row g-3 mb-4" id="kpiCards"></div>
+
+        <!-- DOWNLOAD BAR -->
+        <div class="download-bar mb-4">
+          <div class="d-flex align-items-center gap-3">
+            <i class="bi bi-file-earmark-spreadsheet-fill fs-4 text-success"></i>
+            <div>
+              <div class="fw-700">Export Complete Results</div>
+              <div class="text-muted small">Overall summary · Hourly table · 50 scenarios · Zone data · Analog scores</div>
+            </div>
+          </div>
+          <button id="downloadBtn" class="btn btn-download" onclick="downloadExcel()">
+            <i class="bi bi-download me-2"></i>Download Excel
+          </button>
+        </div>
+
+        <!-- PLOT GRID TABS -->
+        <div class="section-title mb-3">
+          <i class="bi bi-bar-chart-line me-2"></i>Analysis Charts
+          <span class="badge bg-secondary ms-2">14 charts</span>
+        </div>
+
+        <!-- Chart Category Nav -->
+        <ul class="nav chart-nav mb-3" id="chartNav">
+          <li class="nav-item">
+            <a class="chart-nav-link active" href="#" data-cat="all">All Charts</a>
+          </li>
+          <li class="nav-item">
+            <a class="chart-nav-link" href="#" data-cat="scenarios">Scenario Bands</a>
+          </li>
+          <li class="nav-item">
+            <a class="chart-nav-link" href="#" data-cat="uncertainty">Uncertainty</a>
+          </li>
+          <li class="nav-item">
+            <a class="chart-nav-link" href="#" data-cat="ramps">Ramps</a>
+          </li>
+          <li class="nav-item">
+            <a class="chart-nav-link" href="#" data-cat="operations">Operations</a>
+          </li>
+        </ul>
+
+        <div id="plotGrid" class="plot-grid"></div>
+
+        <!-- ANALOG DAYS TABLE -->
+        <div class="section-title mt-4 mb-3">
+          <i class="bi bi-table me-2"></i>Top 20 Analog Days
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover table-sm analog-table" id="analogTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- METHODOLOGY NOTE -->
+        <div class="method-card mt-4">
+          <div class="method-title"><i class="bi bi-journal-text me-2"></i>Methodology</div>
+          <div class="method-body">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div class="method-step">
+                  <div class="method-step-num">1</div>
+                  <div>
+                    <strong>Analog Day Selection</strong><br>
+                    Historical days scored by peak shape, energy, ramp profile,
+                    downstate load, weather (HDH), and recency. Inverse-distance
+                    weighted sampling probabilities.
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="method-step">
+                  <div class="method-step-num">2</div>
+                  <div>
+                    <strong>Gaussian Copula Fitting</strong><br>
+                    264-dimensional (11 zones × 24 hours) Gaussian copula fitted
+                    to rank-transformed forecast errors using Ledoit-Wolf shrinkage
+                    estimator for the correlation matrix.
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="method-step">
+                  <div class="method-step-num">3</div>
+                  <div>
+                    <strong>Scenario Generation</strong><br>
+                    Cholesky-based correlated Normal draws mapped back to load via
+                    probability-weighted empirical quantile:
+                    <em>L = Forecast / (1 + ε)</em>.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /resultsSection -->
+
+    </div><!-- /right col -->
+  </div><!-- /row -->
+</main>
+
+<!-- ═════════════════════════════ FOOTER ══════════════════════════════════ -->
+<footer class="site-footer-bottom">
+  <div class="container-fluid px-4">
+    <div class="d-flex justify-content-between align-items-center py-3">
+      <span class="text-muted small">
+        NYISO Gaussian Copula Scenario Generator · Gaussian Copula + Ledoit-Wolf Shrinkage · 264 Dimensions
+      </span>
+      <span class="text-muted small">
+        For research &amp; operational planning · Not an official NYISO product
+      </span>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

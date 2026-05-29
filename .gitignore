@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Data files — included directly (each zone file ~4MB, total ~50MB)
+# To exclude them uncomment the line below:
+# data/*.xlsx
+
+# Temp outputs
+/tmp/
+nyiso_copula_sessions/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.local
+*.env
+
+# Logs
+*.log
