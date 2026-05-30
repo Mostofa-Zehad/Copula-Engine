@@ -48,7 +48,7 @@ LAYOUT_BASE = dict(
     paper_bgcolor="#FFFFFF",
     plot_bgcolor="#FFFFFF",
     font=dict(family="Inter, system-ui, sans-serif", size=11, color=NAVY),
-    margin=dict(l=72, r=58, t=80, b=56),
+    margin=dict(l=72, r=58, t=76, b=56),
     legend=dict(
         orientation="h",
         yanchor="bottom", y=1.02,
@@ -322,7 +322,7 @@ def _plot_std_cv(m) -> dict:
         xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("Standard Deviation (MW)", tickformat=",.0f"),
         yaxis2=y2,
-        margin=dict(l=72, r=78, t=80, b=56),
+        margin=dict(l=72, r=78, t=76, b=56),
         bargap=0.18,
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
@@ -362,7 +362,7 @@ def _plot_corr_heatmap(m) -> dict:
         yaxis=dict(title=dict(text="Hour", font=dict(size=11)), tickfont=dict(size=9),
                    showgrid=False, zeroline=False, autorange="reversed",
                    linecolor="#E2E8F0"),
-        margin=dict(l=55, r=55, t=80, b=54),
+        margin=dict(l=55, r=55, t=76, b=54),
     )
     return {"id": "plot_06_corr_heatmap", "title": "Correlation Heatmap",
             "data": traces, "layout": layout}
@@ -678,7 +678,7 @@ def _plot_reserve(m) -> dict:
         xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("Reserve Requirement (MW)", tickformat=","),
         yaxis2=y2,
-        margin=dict(l=72, r=78, t=80, b=56),
+        margin=dict(l=72, r=78, t=76, b=56),
         barmode="group", bargap=0.08,
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
