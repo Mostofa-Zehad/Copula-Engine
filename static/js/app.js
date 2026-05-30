@@ -599,7 +599,7 @@ function renderPlots(plots) {
       <div class="plot-container" id="${cid}" data-plot-id="${p.id}"></div>`;
     grid.appendChild(card);
 
-    Plotly.newPlot(cid, p.data, { ...p.layout, autosize: true, height: isWide ? 420 : 350 }, {
+    Plotly.newPlot(cid, p.data, { ...p.layout, autosize: true, height: isWide ? 450 : 390 }, {
       responsive: true,
       displayModeBar: true,
       modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"],
@@ -635,7 +635,7 @@ function expandChart(containerId, title) {
 
   Plotly.newPlot("expandedChart",
     JSON.parse(JSON.stringify(src.data)),
-    { ...JSON.parse(JSON.stringify(src.layout)), height: 520, autosize: true },
+    { ...JSON.parse(JSON.stringify(src.layout)), height: 560, autosize: true },
     { responsive: true, displaylogo: false }
   );
 }
