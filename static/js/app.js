@@ -84,18 +84,10 @@ async function fetchDateInfo() {
     document.getElementById("dateDisplayLabel").textContent = d.date_display || "";
     document.getElementById("weekdayNameLabel").textContent = d.weekday_name || "";
 
-    // Day type pill
-    const pill = document.getElementById("dayTypePill");
-    const pillClasses = { weekday: "pill-weekday", weekend: "pill-weekend", holiday: "pill-holiday" };
-    const pillIcons   = { weekday: "bi-calendar-week", weekend: "bi-calendar-weekend", holiday: "bi-star-fill" };
-    const dt = d.day_type || "weekday";
-    pill.className = `day-type-pill ${pillClasses[dt] || "pill-weekday"}`;
-    pill.innerHTML = `<i class="bi ${pillIcons[dt] || "bi-calendar"}"></i> ${dt.charAt(0).toUpperCase() + dt.slice(1)}`;
-
-    // Holiday name
+    // Holiday name badge
     const hn = document.getElementById("holidayNameLabel");
     if (d.holiday_name) {
-      hn.textContent = `— ${d.holiday_name}`;
+      hn.textContent = d.holiday_name;
       hn.classList.remove("d-none");
     } else {
       hn.classList.add("d-none");
@@ -108,6 +100,21 @@ async function fetchDateInfo() {
       hdhInline?.classList.remove("d-none");
     } else {
       hdhInline?.classList.add("d-none");
+    }
+
+    // Pre-select the auto-detected day type — user can still override
+    const detectedType = d.day_type || "weekday";
+    const radio = document.querySelector(`input[name="dayType"][value="${detectedType}"]`);
+    if (radio) radio.checked = true;
+
+    // Show auto-suggestion note below the buttons
+    const autoNote = document.getElementById("dayTypeAutoNote");
+    if (autoNote) {
+      const labels = { weekday: "Weekday", weekend: "Weekend", holiday: "Holiday" };
+      const holidayPart = d.holiday_name ? ` — ${d.holiday_name}` : "";
+      autoNote.innerHTML =
+        `<i class="bi bi-magic me-1"></i>Auto-suggested: <strong>${labels[detectedType]}${holidayPart}</strong>`
+        + `<span class="ms-2 text-muted">· Override if needed</span>`;
     }
 
     spinner?.classList.add("d-none");
@@ -416,10 +423,13 @@ async function generateScenarios() {
   const wWeather    = parseFloat(document.getElementById("wWeather")?.value || "0.10");
   const wRecency    = parseFloat(document.getElementById("wRecency")?.value || "0.05");
 
+  const dayType = document.querySelector('input[name="dayType"]:checked')?.value || "weekday";
+
   const payload = {
     target_date:      targetDate,
     forecast_24h:     forecast24h,
     selected_zones:   selectedZones,
+    day_type:         dayType,
     historical_years: histYears,
     day_window:       dayWindow,
     seed,
