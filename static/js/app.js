@@ -483,6 +483,13 @@ async function generateScenarios() {
     allPlots = data.plots;
     renderResults(data.metrics, data.plots);
     showSection("results");
+    // Resize all charts after the section becomes visible — charts rendered
+    // while hidden don't know their real container width until now.
+    setTimeout(() => {
+      document.querySelectorAll(".plot-container[id]").forEach(el => {
+        try { Plotly.Plots.resize(el); } catch (_) {}
+      });
+    }, 120);
     checkDataStatus();
 
   } catch (err) {
