@@ -48,7 +48,7 @@ LAYOUT_BASE = dict(
     paper_bgcolor="#FFFFFF",
     plot_bgcolor="#FFFFFF",
     font=dict(family="Inter, system-ui, sans-serif", size=11, color=NAVY),
-    margin=dict(l=72, r=40, t=72, b=56),
+    margin=dict(l=72, r=58, t=72, b=56),
     legend=dict(
         orientation="h",
         yanchor="bottom", y=1.02,
@@ -178,7 +178,8 @@ def _plot_scenario_band(m, sr) -> dict:
         title=_title("Scenario Uncertainty Band", sub),
         xaxis=_xax("Hour of Day",
                    tickvals=list(range(1, 25)),
-                   ticktext=[str(h) for h in range(1, 25)]),
+                   ticktext=[str(h) for h in range(1, 25)],
+                   range=[0.5, 24.5]),
         yaxis=_yax("System Load (MW)", tickformat=",.0f"),
         legend=_leg_inside(),
     )
@@ -212,7 +213,7 @@ def _plot_fan(m, sr) -> dict:
     sub = f"{m['target_date']}  ·  {sr.n_scenarios} correlated Gaussian Copula draws"
     layout = _layout(
         title=_title(f"{sr.n_scenarios} Dependent Load Scenarios", sub),
-        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25))),
+        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("System Load (MW)", tickformat=",.0f"),
     )
     return {"id": "plot_02_fan", "title": "Fan Plot (All Scenarios)",
@@ -240,7 +241,7 @@ def _plot_crps(m) -> dict:
     layout = _layout(
         title=_title("Hourly Spread CRPS",
                      "Lower = tighter, more confident scenarios  ·  Red bars exceed the mean"),
-        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25))),
+        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("CRPS (MW)"),
         bargap=0.18,
     )
@@ -283,7 +284,7 @@ def _plot_load_boxplot(m, sr) -> dict:
     sub = f"{m['target_date']}  ·  {sr.n_scenarios} scenarios  ·  whiskers = P05/P95"
     layout = _layout(
         title=_title("Hourly Load Distribution", sub),
-        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25))),
+        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("System Load (MW)", tickformat=",.0f"),
         boxmode="overlay",
     )
@@ -318,9 +319,10 @@ def _plot_std_cv(m) -> dict:
     layout = _layout(
         title=_title("Hourly Load Uncertainty",
                      "Bars = standard deviation (MW)  ·  Line = coefficient of variation (%)"),
-        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25))),
+        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("Standard Deviation (MW)", tickformat=",.0f"),
         yaxis2=y2,
+        margin=dict(l=72, r=78, t=72, b=56),
         bargap=0.18,
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
@@ -435,7 +437,7 @@ def _plot_adj_corr(m) -> dict:
     layout = _layout(
         title=_title("Adjacent-Hour Correlation",
                      "Higher = stronger temporal realism  ·  GC-50 should approach the actual benchmark"),
-        xaxis=_xax("Hour Pair  (h → h+1)", tickvals=list(range(2, 25))),
+        xaxis=_xax("Hour Pair  (h → h+1)", tickvals=list(range(2, 25)), range=[1.5, 24.5]),
         yaxis=_yax("Pearson Correlation (r)", range=[-0.05, 1.08]),
     )
     return {"id": "plot_08_adj_corr", "title": "Adjacent-Hour Correlation",
@@ -465,7 +467,7 @@ def _plot_peak_hour(m) -> dict:
         title=_title("Peak Hour Probability Distribution",
                      f"Most likely peak: Hour {mode_h}  ·  "
                      f"{m['peak_hr_mode_pct']:.1f}% of {m['n_scenarios']} scenarios  ·  Amber = mode"),
-        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25))),
+        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("Probability (%)", ticksuffix="%"),
         bargap=0.18,
         showlegend=False,
@@ -507,7 +509,7 @@ def _plot_ramp_band(m) -> dict:
     layout = _layout(
         title=_title("Ramp Uncertainty Band",
                      f"{m['target_date']}  ·  P05–P95 corridor across {m['n_scenarios']} scenarios"),
-        xaxis=_xax("Ramp Ending Hour", tickvals=list(range(2, 25))),
+        xaxis=_xax("Ramp Ending Hour", tickvals=list(range(2, 25)), range=[1.5, 24.5]),
         yaxis=_yax("Ramp Rate (MW / hour)", tickformat=","),
     )
     return {"id": "plot_10_ramp_band", "title": "Ramp Band",
@@ -540,7 +542,7 @@ def _plot_ramp_boxplot(m) -> dict:
     layout = _layout(
         title=_title("Hourly Ramp Distribution",
                      f"{m['target_date']}  ·  {m['n_scenarios']} scenarios  ·  whiskers = P05 / P95"),
-        xaxis=_xax("Ramp Ending Hour", tickvals=list(range(2, 25))),
+        xaxis=_xax("Ramp Ending Hour", tickvals=list(range(2, 25)), range=[1.5, 24.5]),
         yaxis=_yax("Ramp Rate (MW / hour)", tickformat=","),
         boxmode="overlay",
     )
@@ -572,7 +574,7 @@ def _plot_ramp_std(m) -> dict:
     layout = _layout(
         title=_title("Ramp Uncertainty — Std Dev & Extreme Ramps",
                      "Teal = standard deviation  ·  Orange = 95th-percentile absolute ramp"),
-        xaxis=_xax("Ramp Ending Hour", tickvals=list(range(2, 25))),
+        xaxis=_xax("Ramp Ending Hour", tickvals=list(range(2, 25)), range=[1.5, 24.5]),
         yaxis=_yax("Ramp Rate (MW / hour)", tickformat=","),
         barmode="group", bargap=0.12,
     )
@@ -673,9 +675,10 @@ def _plot_reserve(m) -> dict:
     layout = _layout(
         title=_title("Operating Reserve Requirements by Hour",
                      "Blue = upward reserve (P95)  ·  Red = downward reserve (P05)  ·  ◆ = scenario spread"),
-        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25))),
+        xaxis=_xax("Hour of Day", tickvals=list(range(1, 25)), range=[0.5, 24.5]),
         yaxis=_yax("Reserve Requirement (MW)", tickformat=","),
         yaxis2=y2,
+        margin=dict(l=72, r=78, t=72, b=56),
         barmode="group", bargap=0.08,
         legend=dict(
             orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
